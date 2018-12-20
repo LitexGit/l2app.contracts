@@ -3,11 +3,17 @@ pragma solidity ^0.4.24;
 import "./GameBase.sol";
 import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
 
-contract ETHChannel {
+contract ETHChannel {  
     /**
         States
      */
     
+    address public regulator;
+
+    address public provider;
+
+    int256 public providerDeposit;
+
     GameBase public game;
 
     uint256 public settleWindowMin;
@@ -21,26 +27,34 @@ contract ETHChannel {
         
         uint256 settleBlock;
 
-        mapping (address => Participant) participants;
-    }
+        address participant;
 
-    struct Participant {
         address puppet;
 
         uint256 deposit;
 
-        uint256 withdraw;
+        bytes32 participantBalanceHash;
 
-        bytes32 balanceHash;
+        uint256 participantNonce;
 
-        uint256 nonce;
+        bytes32 providerBalanceHash;
+
+        uint256 providerNonce;
+
+        uint256 inAmount;
+
+        uint256 inNonce;
+
+        uint256 outAmount;
+
+        uint256 outNonce;
 
         bool isCloser;
     }
 
     uint256 public channelCounter;
 
-    mapping (bytes32 => uint256) public participantsHash_to_channelCounter;
+    mapping (address => uint256) public participant_to_channelCounter;
 
     mapping (bytes32 => Channel) public identifier_to_channel;
 
@@ -377,71 +391,87 @@ contract ETHChannel {
      */
 
     event ChannelOpened (
-        address indexed participant1,
-        address indexed participant2,
+        address indexed participant,
         address puppet,
         bytes32 channelIdentifier,
-        uint256 settle_timeout,
+        uint256 settleWindow,
         uint256 amount
     );
 
     event PuppetChanged (
         address participant,
-        address partner,
         bytes32 channelIdentifier,
         address puppet
     );
 
     event ChannelNewDeposit(
-        bytes32 indexed channel_identifier,
+        bytes32 indexed channelIdentifier,
         address indexed participant,
         uint256 new_deposit,
         uint256 total_deposit
     );
 
-    event ChannelWithdraw (
-        bytes32 indexed channel_identifier,
-        address indexed participant,
-        address indexed partner,
-        uint256 amount,
-        uint256 deposit
-    );
-
     event CooperativeSettled (
         bytes32 indexed channelIdentifier,
-        address indexed participant1_address, 
-        address indexed participant2_address,
-        uint256 participant1_balance,
-        uint256 participant2_balance
+        address indexed participant, 
+        uint256 balance,
+        uint256 recycle
     );
 
-    event ChannelClosed(
-        bytes32 indexed channel_identifier,
+    event ChannelClosed (
+        bytes32 indexed channelIdentifier,
         address indexed closing,
-        bytes32 balanceHash
+        bytes32 balanceHash,
+        uint256 nonce,
+        uint256 inAmount,
+        uint256 inNonce,
+        uint256 outAmount,
+        uint256 outNonce
     );
 
-    event NonclosingUpdateBalanceProof(
-        bytes32 indexed channel_identifier,
-        address indexed nonclosing,
-        bytes32 balanceHash
+    event PartnerUpdateProof(
+        bytes32 indexed channelIdentifier,
+        address indexed participant,
+        bytes32 balanceHash,
+        uint256 nonce,
+        uint256 inAmount,
+        uint256 inNonce,
+        uint256 outAmount,
+        uint256 outNonce        
     );
+
+    event RegulatorUpdateProof (
+        bytes32 indexed channelIdentifier,
+        uint256 inAmount,
+        uint256 inNonce,
+        uint256 outAmount,
+        uint256 outNonce        
+    )
 
     event ChannelSettled(
         bytes32 indexed channelIdentifier, 
-        address indexed participant1,
-        address indexed participant2,
+        address indexed participant,
+        uint256 transferToParticipantAmount, 
+        uint256 transferToProviderAmount,
         bytes32 lockedIdentifier,
-        uint256 transferToParticipant1Amount, 
-        uint256 transferToParticipant2Amount
     );
 
     event ChannelUnlocked (
         bytes32 indexed lockIdentifier,
-        address indexed participant1,
-        address indexed participant2,
-        uint256 transferAmount1, 
-        uint256 transferAmount2
+        address indexed participant,
+        uint256 transferToParticipantAmount, 
+        uint256 transferToProviderAmount
+    );
+
+    event ProviderDeposit (
+        address provider,
+        uint256 amount,
+        int256 balance
+    );
+
+    event ProviderWithdraw (
+        uint256 amount,
+        int256 balance
     );
 
     /**

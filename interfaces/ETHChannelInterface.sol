@@ -3,7 +3,6 @@ pragma solidity ^0.4.24;
 interface ETHChannel {
     function openChannel (
         address participant,
-        address partner,
         address puppet,
         uint256 settleWindow
     )
@@ -12,7 +11,6 @@ interface ETHChannel {
     {
         emit ChannelOpened (
             participant,
-            partner,
             puppet,
             channelIdentifier,
             msg.value,
@@ -21,144 +19,191 @@ interface ETHChannel {
     }
 
     function setPuppet (
-        address partner,
         address puppet,
-        bytes signature
+        uint256 lastCommitBlock,
+        bytes providerSignature,
+        bytes regulatorSignature
     )
         public
     {
         emit PuppetChanged (
             msg.sender,
-            partner,
             channelIdentifier,
             puppet
         );
     }
 
     function setTotalDeposit (
-        address participant,
-        address partner
+        address participant
     )
         public
         payable
     {
         emit ChannelNewDeposit (
-            channelIdentifier,
             participant,
+            channelIdentifier,
             msg.value,
             participant.deposit
         );
     }
 
-    function setTotalWithdraw (
-        address participant,
-        address partner,
-        uint256 amount,
-        bytes participantSignature,
-        bytes partnerSignature
-    )
-        public
-        payable
-    {
-        emit ChannelWithdraw (
-            channelIdentifier,
-            participant,
-            amount,
-            participant.deposit
-        );
-    }
-
     function cooperativeSettle (
-        address participant1Address,
-        uint256 participant1Balance,
-        address participant2Address,
-        uint256 participant2Balance,
-        bytes participant1Signature,
-        bytes participant2Signature
+        address participant,
+        uint256 balance,
+        bytes participantSignature,
+        bytes providerSignature,
+        bytes regulatorSignature
     )
         public
     {
         emit CooperativeSettled (
             channelIdentifier, 
-            participant1Address, 
-            participant2Address, 
-            participant1Balance, 
-            participant2Balance
+            participant, 
+            balance, 
+            recycle
         );
     }
 
     function closeChannel (
-        address partner, 
         bytes32 balanceHash, 
         uint256 nonce, 
-        bytes signature
+        bytes partnerSignature,
+        uint256 inAmount,
+        uint256 inNonce,
+        bytes regulatorSignature,
+        bytes inProviderSignature,
+        uint256 outAmount,
+        uint256 outNonce,
+        bytes participantSignature,
+        bytes outProviderSignature
     )
         public
     {
         emit ChannelClosed (
             channelIdentifier, 
             msg.sender, 
-            balanceHash
+            balanceHash,
+            nonce,
+            inAmount,
+            inNonce,
+            outAmount,
+            outNonce
         );
     }
      
-    function nonclosingUpdateBalanceProof (
-        address nonclosing,
-        address closing, 
+    function partnerUpdateProof (
+        address participant,
         bytes32 balanceHash, 
         uint256 nonce, 
-        bytes closingSignature,
-        bytes nonclosingSignature
+        bytes partnerSignature,
+        uint256 inAmount,
+        uint256 inNonce,
+        bytes regulatorSignature,
+        bytes inProviderSignature,
+        uint256 outAmount,
+        uint256 outNonce,
+        bytes participantSignature,
+        bytes outProviderSignature
+        bytes participantDelegateSignature,
     )
         public
     {
-        emit NonclosingUpdateBalanceProof (
+        emit partnerUpdateProof (
             channelIdentifier, 
-            nonclosing, 
-            balanceHash
+            participant, 
+            balanceHash,
+            nonce,
+            inAmount,
+            inNonce,
+            outAmount,
+            outNonce
+        );
+    }
+
+    function regulatorUpdateProof (
+        bytes32 channelIdentifier,
+        uint256 inAmount,
+        uint256 inNonce,
+        bytes regulatorSignature,
+        bytes inProviderSignature,
+        uint256 outAmount,
+        uint256 outNonce,
+        bytes participantSignature,
+        bytes outProviderSignature
+    )
+        public
+    {
+        emit regulatorUpdateProof (
+            channelIdentifier,
+            inAmount,
+            inNonce,
+            outAmount,
+            outNonce
         );
     }
 
     function settleChannel (
-        address participant1, 
-        uint256 participant1TransferredAmount,
-        uint256 participant1LockedAmount,
-        uint256 participant1LockNonce,
-        address participant2,
-        uint256 participant2TransferredAmount,
-        uint256 participant2LockedAmount,
-        uint256 participant2LockNonce
+        address participant, 
+        uint256 participantTransferredAmount,
+        uint256 participantLockedAmount,
+        uint256 participantLockNonce,
+        uint256 providerTransferredAmount,
+        uint256 providerLockedAmount,
+        uint256 providerLockNonce
     )
         public
     {
         emit ChannelSettled (
             channelIdentifier, 
-            participant1, 
-            participant2, 
+            participant, 
+            participantTransferredAmount, 
+            providerTransferredAmount,
             lockIdentifier, 
-            participant1TransferredAmount, participant2TransferredAmount
         );
     }
 
     function unlock (
-        address participant1,
-        address participant2,
+        address participant,
+        address provider,
         bytes32 lockIdentifier
     )
         public
     {   
         emit ChannelUnlocked (
             lockIdentifier,
-            participant1,
-            participant2,
-            transferredAmount1,
-            transferredAmount2
+            participant,
+            participantTransferredAmount, 
+            providerTransferredAmount,
+        );
+    }
+
+    function providerDeposit ()
+        public
+        payable
+    {
+        emit ProviderDeposit (
+            provider,
+            msg.value,
+            providerDeposit
+        );
+    }
+
+    function providerWithdraw (
+        int256 balance,
+        uint256 lastCommitBlock,
+        bytes providerSignature,
+        bytes regulatorSignature
+    )
+        public
+    {
+        emit ProviderWithdraw (
+            amount,
+            balance
         );
     }
 
     function getChannelIdentifier (
-        address participant, 
-        address partner
+        address participant
     ) 
         view
         public
@@ -176,91 +221,86 @@ interface ETHChannel {
      */
 
     event ChannelOpened (
-        address indexed participant1,
-        address indexed participant2,
+        address indexed participant,
         address puppet,
         bytes32 channelIdentifier,
-        uint256 settle_timeout,
+        uint256 settleWindow,
         uint256 amount
     );
 
     event PuppetChanged (
         address participant,
-        address partner,
         bytes32 channelIdentifier,
         address puppet
     );
 
     event ChannelNewDeposit(
-        bytes32 indexed channel_identifier,
+        bytes32 indexed channelIdentifier,
         address indexed participant,
         uint256 new_deposit,
         uint256 total_deposit
     );
 
-    event ChannelWithdraw (
-        bytes32 indexed channel_identifier,
-        address indexed participant,
-        address indexed partner,
-        uint256 amount,
-        uint256 deposit
-    );
-
     event CooperativeSettled (
         bytes32 indexed channelIdentifier,
-        address indexed participant1_address, 
-        address indexed participant2_address,
-        uint256 participant1_balance,
-        uint256 participant2_balance
+        address indexed participant, 
+        uint256 balance,
+        uint256 recycle
     );
 
-    event ChannelClosed(
-        bytes32 indexed channel_identifier,
+    event ChannelClosed (
+        bytes32 indexed channelIdentifier,
         address indexed closing,
-        bytes32 balanceHash
+        bytes32 balanceHash,
+        uint256 nonce,
+        uint256 inAmount,
+        uint256 inNonce,
+        uint256 outAmount,
+        uint256 outNonce
     );
 
-    event NonclosingUpdateBalanceProof(
-        bytes32 indexed channel_identifier,
-        address indexed nonclosing,
-        bytes32 balanceHash
+    event PartnerUpdateProof(
+        bytes32 indexed channelIdentifier,
+        address indexed participant,
+        bytes32 balanceHash,
+        uint256 nonce,
+        uint256 inAmount,
+        uint256 inNonce,
+        uint256 outAmount,
+        uint256 outNonce        
     );
+
+    event RegulatorUpdateProof (
+        bytes32 indexed channelIdentifier,
+        uint256 inAmount,
+        uint256 inNonce,
+        uint256 outAmount,
+        uint256 outNonce        
+    )
 
     event ChannelSettled(
         bytes32 indexed channelIdentifier, 
-        address indexed participant1,
-        address indexed participant2,
+        address indexed participant,
+        uint256 transferToParticipantAmount, 
+        uint256 transferToProviderAmount,
         bytes32 lockedIdentifier,
-        uint256 transferToParticipant1Amount, 
-        uint256 transferToParticipant2Amount
     );
 
     event ChannelUnlocked (
         bytes32 indexed lockIdentifier,
-        address indexed participant1,
-        address indexed participant2,
-        uint256 transferAmount1, 
-        uint256 transferAmount2
+        address indexed participant,
+        uint256 transferToParticipantAmount, 
+        uint256 transferToProviderAmount
     );
 
-    /**
-        Externel Methods
-     */
+    event ProviderDeposit (
+        address provider,
+        uint256 amount,
+        int256 balance
+    );
 
-    function getParticipantInfo(
-        bytes32 channelIdentifier,
-        address participant
-    )
-        view
-        external
-        returns (address puppet, uint256 deposit, bool isCloser, bytes32 balanceHash, uint256 nonce)
-    {
-        Channel storage channel = channels[channelIdentifier];
-        Participant storage participantStruct = channel.participants[participant];
-        puppet = participantStruct.puppet;
-        deposit = participantStruct.deposit;
-        isCloser = participantStruct.isCloser;
-        balanceHash = participantStruct.balanceHash;
-        nonce = participantStruct.nonce;
-    }
+    event ProviderWithdraw (
+        uint256 amount,
+        int256 balance
+    );
 }

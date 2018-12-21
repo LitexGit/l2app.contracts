@@ -50,6 +50,7 @@ interface ETHChannel {
     function cooperativeSettle (
         address participant,
         uint256 balance,
+        uint256 lastCommitBlock,
         bytes participantSignature,
         bytes providerSignature,
         bytes regulatorSignature
@@ -59,12 +60,12 @@ interface ETHChannel {
         emit CooperativeSettled (
             channelIdentifier, 
             participant, 
-            balance, 
-            recycle
+            balance
         );
     }
 
     function closeChannel (
+        address participant,
         bytes32 balanceHash, 
         uint256 nonce, 
         bytes partnerSignature,
@@ -103,8 +104,8 @@ interface ETHChannel {
         uint256 outAmount,
         uint256 outNonce,
         bytes participantSignature,
-        bytes outProviderSignature
-        bytes participantDelegateSignature,
+        bytes outProviderSignature,
+        bytes participantDelegateSignature
     )
         public
     {

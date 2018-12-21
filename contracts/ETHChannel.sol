@@ -2,19 +2,22 @@ pragma solidity ^0.4.24;
 
 import "./GameBase.sol";
 import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
+import "openzeppelin-solidity/contracts/utils/Address.sol";
 
 contract ETHChannel {  
+    using Address for address;
+
     /**
         States
      */
     
+    GameBase public game;
+
     address public regulator;
 
     address public provider;
 
-    int256 public providerDeposit;
-
-    GameBase public game;
+    int256 public providerBalance;
 
     uint256 public settleWindowMin;
     uint256 public settleWindowMax;
@@ -52,9 +55,9 @@ contract ETHChannel {
         bool isCloser;
     }
 
-    uint256 public channelCounter;
+    uint256 public counter;
 
-    mapping (address => uint256) public participant_to_channelCounter;
+    mapping (address => uint256) public participant_to_counter;
 
     mapping (bytes32 => Channel) public identifier_to_channel;
 
@@ -66,12 +69,21 @@ contract ETHChannel {
 
     constructor (
         address _game,
+        address _regulator,
+        address _provider,
         uint256 _settleWindowMin,
         uint256 _settleWindowMax
     )
         public
     {
+        require(_game.isContract(), "invalid game contract");
+        require(_provider.isContract() == false, "provider should be a external address");
+        require(settleWindowMin > 0);
+        require(settleWindowMax > settleWindowMin);
+
         game = GameBase(_game);
+        regulator = _regulator;
+        provider = _provider;
         settleWindowMin = _settleWindowMin;
         settleWindowMax = _settleWindowMax;
     }
@@ -80,9 +92,9 @@ contract ETHChannel {
         Modifiers
      */
 
-    modifier isChannelOpened (address participant, address partner) {
-        bytes32 channelIdentifier = getChannelIdentifier(participant, partner);
-        require(channels[channelIdentifier].state == 1, "channel should be open");
+    modifier isChannelOpened (address participant) {
+        bytes32 channelIdentifier = getChannelIdentifier(participant);
+        require(identifier_to_channel[channelIdentifier].state == 1, "channel should be open");
         _;
     }
 
@@ -97,27 +109,14 @@ contract ETHChannel {
         _;
     }
 
+    modifier commitBlockValid (uint256 lastCommitBlock) {
+        require(block.number <= lastCommitBlock, "commit block expired");
+        _;
+    }
+
     /**
         Externel Methods
      */
-
-    function getParticipantProfile(
-        bytes32 channelIdentifier,
-        address participant
-    )
-        external
-        view
-        returns (address puppet, uint256 deposit, uint256 withdraw, bool isCloser, bytes32 balanceHash, uint256 nonce)
-    {
-        Channel storage channel = identifier_to_channel[channelIdentifier];
-        Participant storage participantProfile = channel.participants[participant];
-        puppet = participantProfile.puppet;
-        deposit = participantProfile.deposit;
-        withdraw = participantProfile.withdraw;
-        isCloser = participantProfile.isCloser;
-        balanceHash = participantProfile.balanceHash;
-        nonce = participantProfile.nonce;
-    }
     
     /**
         Public Methods
@@ -125,7 +124,6 @@ contract ETHChannel {
 
     function openChannel (
         address participant,
-        address partner,
         address puppet,
         uint256 settleWindow
     )
@@ -133,25 +131,21 @@ contract ETHChannel {
         payable
         settleWindowValid (settleWindow)
     {
-        bytes32 participantsHash = getParticipantsHash (participant, partner);
-        require (participantsHash_to_channelCounter[participantsHash] == 0, "channel already exists");
-
-        require (msg.value > 0, "should deposit when open channel");
+        require (participant_to_counter[participant] == 0, "channel already exists");
+        require (msg.value > 0, "participant should deposit when open channel");
 
         channelCounter += 1;
-        participantsHash_to_channelCounter[participantsHash] = channelCounter;
+        participant_to_counter[participant] = channelCounter;
 
-        bytes32 channelIdentifier = getChannelIdentifier (participant, partner);
-        identifier_to_channel[channelIdentifier].state = 1;
-        identifier_to_channel[channelIdentifier].settleBlock = settleWindow;
-
-        Participant storage participantProfile = identifier_to_channel[channelIdentifier].participants[participant];
-        participantProfile.deposit = msg.value;
-        participantProfile.puppet = puppet;
+        bytes32 channelIdentifier = getChannelIdentifier (participant);
+        Channel storage channel = identifier_to_channel[channelIdentifier];
+        channel.state = 1;
+        channel.puppet = puppet;
+        channel.deposit = msg.value;
+        channel.settleBlock = settleWindow;
 
         emit ChannelOpened (
             participant,
-            partner,
             puppet,
             channelIdentifier,
             msg.value,
@@ -160,170 +154,202 @@ contract ETHChannel {
     }
 
     function setPuppet (
-        address partner,
         address puppet,
         uint256 lastCommitBlock,
-        bytes signature
+        bytes providerSignature,
+        bytes regulatorSignature
     )
         public
-        isChannelOpened (msg.sender, partner)
+        isChannelOpened (msg.sender)
     {
         require (block.number <= lastCommitBlock, "commit expired");
 
-        bytes32 channelIdentifier = getChannelIdentifier (msg.sender, partner);
-        Participant storage participantProfile = identifier_to_channel[channelIdentifier].participants[msg.sender];
-        require (participantProfile.puppet != puppet, "new puppet should be different from old one");
+        bytes32 channelIdentifier = getChannelIdentifier (msg.sender);
+        Channel storage channel = identifier_to_channel[channelIdentifier];
+        require (channel.puppet != puppet, "new puppet should be different from old one");
 
         bytes32 messageHash = keccak256(
             abi.encodePacked(
-                chainID,
                 address(this),
                 channelIdentifier,
                 puppet,
                 lastCommitBlock
             )
         );
-        require(ECDSA.recover(messageHash, signature) == partner, "invalid signature");
+        require(ECDSA.recover(messageHash, providerSignature) == provider, "invalid provider signature");
+        require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invalid regulator signature");
 
-        participantProfile.puppet = puppet;
+        channel.puppet = puppet;
 
         emit PuppetChanged (
-            msg.sender,
-            partner,
             channelIdentifier,
+            msg.sender,
             puppet
         );
     }
 
     function setTotalDeposit (
-        address participant,
-        address partner
+        address participant
     )
         public
         payable
-        isChannelOpened(participant, partner)
+        isChannelOpened(participant)
     {
-        bytes32 channelIdentifier = getChannelIdentifier(participant, partner);
-        Participant storage participantProfile = identifier_to_channel[channelIdentifier].participants[participant];
-        participantProfile.deposit += msg.value;
+        require(msg.value > 0, "invalid deposit");
+
+        bytes32 channelIdentifier = getChannelIdentifier(participant);
+        Channel storage channel = identifier_to_channel[channelIdentifier];
+        channel.deposit += msg.value;
 
         emit ChannelNewDeposit (
             channelIdentifier,
             participant,
             msg.value,
-            participant.deposit
-        );
-    }
-
-    function setTotalWithdraw (
-        address participant,
-        address partner,
-        uint256 amount,
-        bytes participantSignature,
-        bytes partnerSignature
-    )
-        public
-        payable
-    {
-        emit ChannelWithdraw (
-            channelIdentifier,
-            participant,
-            amount,
-            participant.deposit
+            channel.deposit
         );
     }
 
     function cooperativeSettle (
-        address participant1Address,
-        uint256 participant1Balance,
-        address participant2Address,
-        uint256 participant2Balance,
-        bytes participant1Signature,
-        bytes participant2Signature
+        address participant,
+        uint256 balance,
+        uint256 lastCommitBlock,
+        bytes participantSignature,
+        bytes providerSignature,
+        bytes regulatorSignature
     )
         public
+        isChannelOpened(participant)
+        commitBlockValid(lastCommitBlock)
     {
-        bytes32 channelIdentifier = getChannelIdentifier(participant1Address, participant2Address);
+        require(msg.sender == participant, "only participant can trigger");
 
-        address recoveredAddress = recoverAddressFromCooperativeSettleSignature(
-            channelIdentifier, 
-            participant1Address, 
-            participant1Balance, 
-            participant2Address, 
-            participant2Balance, 
-            participant1Signature
-        );
-        require(recoveredAddress == participant1Address, "signature should be signed by participant1");
+        bytes32 channelIdentifier = getChannelIdentifier(participant);
 
-        recoveredAddress = recoverAddressFromCooperativeSettleSignature(
-            channelIdentifier, 
-            participant1Address, 
-            participant1Balance, 
-            participant2Address, 
-            participant2Balance, 
-            participant2Signature
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                address(this),
+                channelIdentifier,
+                participant,
+                balance,
+                lastCommitBlock
+            ) 
         );
-        require(recoveredAddress == participant2Address, "signature should be signed by participant2");
+        require(ECDSA.recover(messageHash, participantSignature) == participant, "invalid participant signature");
+        require(ECDSA.recover(messageHash, providerSignature) == provider, "invalid provider signature");
+        require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invalid regulator signature");
 
         Channel storage channel = identifier_to_channel[channelIdentifier];
 
-        uint256 totalDeposit = channel.participants[participant1Address].deposit + channel.participants[participant2_address].deposit;
-        require(
-            totalDeposit == safeAddition(participant1_balance, participant2_balance), 
-            "the sum of balances should be equal to the total deposit"
-        );
-
-        delete channel.participants[participant1_address];
-        delete channel.participants[participant2_address];
-        delete channels[channelIdentifier];
-        delete participantsHash_to_channelCounter[getParticipantsHash(participant1_address, participant2_address)];
-
-        if (participant1_balance > 0) {
-            participant1_address.transfer(participant1_balance);
+        if (balance >= channel.deposit) {
+            providerBalance -= balance - channel.deposit;
+        } else {
+            providerBalance += channel.deposit - balance;
         }
 
-        if (participant2_balance > 0) {
-            participant2_address.transfer(participant2_balance);
+        delete identifier_to_channel[channelIdentifier];
+        delete participant_to_counter[participant];
+
+        if (balance > 0) {
+            participant.transfer(balance);
         }
-        
-        emit CooperativeSettled(channelIdentifier, participant1_address, participant2_address, participant1_balance, participant2_balance);
-
-
 
         emit CooperativeSettled (
             channelIdentifier, 
-            participant1Address, 
-            participant2Address, 
-            participant1Balance, 
-            participant2Balance
+            participant, 
+            balance
         );
     }
 
     function closeChannel (
-        address partner, 
+        address participant,
         bytes32 balanceHash, 
         uint256 nonce, 
-        bytes signature
+        bytes partnerSignature,
+        uint256 inAmount,
+        uint256 inNonce,
+        bytes regulatorSignature,
+        bytes inProviderSignature,
+        uint256 outAmount,
+        uint256 outNonce,
+        bytes participantSignature,
+        bytes outProviderSignature
     )
         public
+        isChannelOpened(participant)
     {
+        bytes32 channelIdentifier = getChannelIdentifier(participant);
+        Channel storage channel = identifier_to_channel(channelIdentifier);
+
+        address recoveredPartner = recoverBalanceSignature (
+            channelIdentifier,
+            balanceHash,
+            nonce,
+            partnerSignature
+        );
+
+        if (recoveredPartner == participant) {
+            require(msg.sender == provider, "only provider can trigger");
+            if (nonce > 0) {
+                channel.participantBalanceHash = balanceHash;
+                channel.participantNonce = nonce;
+            }
+            channel.isCloser = false;
+        } else if (recoveredPartner == provider) {
+            require(msg.sender == participant, "only participant can trigger");
+            if (nonce > 0) {
+                channel.providerBalanceHash = balanceHash;
+                channel.providerNonce = nonce;
+            }
+            channel.isCloser = true;
+        } else {
+            revert("invalid partner signature");
+        }
+
+        channel.state = 2;
+        channel.settleBlock += uint256(block.number);
+
+        updateRebalanceProof (
+            channelIdentifier,
+            inAmount,
+            inNonce,
+            regulatorSignature,
+            inProviderSignature,
+            outAmount,
+            outNonce,
+            participantSignature,
+            outProviderSignature
+        );
+
         emit ChannelClosed (
             channelIdentifier, 
             msg.sender, 
-            balanceHash
+            balanceHash,
+            nonce,
+            inAmount,
+            inNonce,
+            outAmount,
+            outNonce
         );
     }
      
-    function nonclosingUpdateBalanceProof (
-        address nonclosing,
-        address closing, 
+    function partnerUpdateProof (
+        address participant,
         bytes32 balanceHash, 
         uint256 nonce, 
-        bytes closingSignature,
-        bytes nonclosingSignature
+        bytes partnerSignature,
+        uint256 inAmount,
+        uint256 inNonce,
+        bytes regulatorSignature,
+        bytes inProviderSignature,
+        uint256 outAmount,
+        uint256 outNonce,
+        bytes participantSignature,
+        bytes outProviderSignature,
+        bytes participantDelegateSignature
     )
         public
     {
+
         emit NonclosingUpdateBalanceProof (
             channelIdentifier, 
             nonclosing, 
@@ -446,7 +472,7 @@ contract ETHChannel {
         uint256 inNonce,
         uint256 outAmount,
         uint256 outNonce        
-    )
+    );
 
     event ChannelSettled(
         bytes32 indexed channelIdentifier, 
@@ -478,20 +504,69 @@ contract ETHChannel {
         Internal Methods
      */
     
-    function getParticipantsHash(
-        address participant,
-        address partner
+    function recoverBalanceHash (
+        bytes32 channelIdentifier,
+        bytes32 balanceHash,
+        uint256 nonce,
+        bytes signature
     )
         internal
-        pure
-        returns (bytes32)
+        view
     {
-        require(participant != 0x0 && partner != 0x0 && participant != partner, "invalid input");
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                address(this),
+                channelIdentifier,
+                balanceHash,
+                nonce
+            )
+        );
+        return ECDSA.recover(messageHash, signature);
+    }
 
-        if (participant < partner) {
-            return keccak256(abi.encodePacked(participant, partner));
-        } else {
-            return keccak256(abi.encodePacked(partner, participant));
+    function updateRebalanceProof (
+        bytes32 channelIdentifier,
+        uint256 inAmount,
+        uint256 inNonce,
+        bytes regulatorSignature,
+        bytes inProviderSignature,
+        uint256 outAmount,
+        uint256 outNonce,
+        bytes participantSignature,
+        bytes outProviderSignature
+    )
+        internal
+    {
+        Channel storage channel = identifier_to_channel[channelIdentifier];
+
+        if (inNonce > channel.inNonce) {
+            bytes32 messageHash = keccak256(
+                abi.encodePacked(
+                    address(this),
+                    channelIdentifier,
+                    inAmount,
+                    inNonce
+                )
+            );
+            require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invalid regulator signature");
+            require(ECDSA.recover(messageHash, inProviderSignature) == provider, "invalid inProvider signature");
+            channel.inAmount = inAmount;
+            channel.inNonce = inNonce;
+        }
+
+        if (outNonce > channel.outNonce) {
+            bytes32 messageHash = keccak256(
+                abi.encodePacked(
+                    address(this),
+                    channelIdentifier,
+                    outAmount,
+                    outNonce
+                )
+            );
+            require(ECDSA.recover(messageHash, participantSignature) == channel.participant, "invalid participant signature");
+            require(ECDSA.recover(messageHash, outProviderSignature) == provider, "invalid outProvider signature");
+            channel.outAmount = outAmount;
+            channel.outNonce = outNonce;            
         }
     }
 }

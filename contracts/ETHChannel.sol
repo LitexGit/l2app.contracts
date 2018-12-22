@@ -98,9 +98,9 @@ contract ETHChannel {
         _;
     }
 
-    modifier isChannelClosed (address participant, address partner) {
-        bytes32 channelIdentifier = getChannelIdentifier(participant, partner);
-        require(channels[channelIdentifier].state == 2, "channel should be closed");
+    modifier isChannelClosed (address participant) {
+        bytes32 channelIdentifier = getChannelIdentifier(participant);
+        require(identifier_to_channel[channelIdentifier].state == 2, "channel should be closed");
         _;
     }
 
@@ -345,36 +345,233 @@ contract ETHChannel {
         uint256 outNonce,
         bytes participantSignature,
         bytes outProviderSignature,
-        bytes participantDelegateSignature
+        bytes consignorSignature
     )
         public
+        isChannelClosed(participant)
     {
+        bytes32 channelIdentifier = getChannelIdentifier(participant);
+        Channel storage channel = identifier_to_channel[channelIdentifier];
 
-        emit NonclosingUpdateBalanceProof (
+        require(block.number <= channel.settleBlock, "commit block expired");
+
+        address recoveredPartner = recoverBalanceSignature (
+            channelIdentifier,
+            balanceHash,
+            nonce
+        );
+
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                address(this),
+                channelIdentifier,
+                balanceHash,
+                nonce,
+                partnerSignature,
+                inAmount,
+                inNonce,
+                regulatorSignature,
+                inProviderSignature,
+                outAmount,
+                outNonce,
+                participantSignature,
+                outProviderSignature
+            )
+        );
+
+        address recoveredConsignor = ECDSA.recover(messageHash, consignorSignature);
+
+        if (channel.isCloser) {
+            require(recoveredPartner == participant, "invalid partner signature");
+            require(recoveredConsignor == provider, "invalid consignor signature");
+
+            if (nonce > channel.participantNonce) {
+                channel.participantNonce = nonce;
+                channel.participantBalanceHash = balanceHash;
+            }
+        } else {
+            require(recoveredPartner == provider, "invalid partner signature");
+            require(recoveredConsignor == participant, "invalid consignor signature");
+
+            if (nonce > channel.providerNonce) {
+                channel.providerNonce = nonce;
+                channel.providerBalanceHash = balanceHash;
+            }        
+        }
+
+        updateRebalanceProof (
+            channelIdentifier,
+            inAmount,
+            inNonce,
+            regulatorSignature,
+            inProviderSignature,
+            outAmount,
+            outNonce,
+            participantSignature,
+            outProviderSignature          
+        );
+
+        emit partnerUpdateProof (
             channelIdentifier, 
-            nonclosing, 
-            balanceHash
+            participant, 
+            channel.balanceHash,
+            channel.nonce,
+            channel.inAmount,
+            channel.inNonce,
+            channel.outAmount,
+            channel.outNonce
+        );
+    }
+
+    function regulatorUpdateProof (
+        address participant,
+        uint256 inAmount,
+        uint256 inNonce,
+        bytes regulatorSignature,
+        bytes inProviderSignature,
+        uint256 outAmount,
+        uint256 outNonce,
+        bytes participantSignature,
+        bytes outProviderSignature
+    )
+        public
+        isChannelClosed (participant)
+    {
+        bytes32 channelIdentifier = getChannelIdentifier(participant);
+        Channel storage channel = identifier_to_channel[channelIdentifier];
+        require(block.number <= channel.settleBlock, "commit block expired");
+
+        updateRebalanceProof (
+            channelIdentifier,
+            inAmount,
+            inNonce,
+            regulatorSignature,
+            inProviderSignature,
+            outAmount,
+            outNonce,
+            participantSignature,
+            outProviderSignature 
+        );
+
+        emit regulatorUpdateProof (
+            channelIdentifier,
+            participant,
+            channel.inAmount,
+            channel.inNonce,
+            channel.outAmount,
+            channel.outNonce
         );
     }
 
     function settleChannel (
-        address participant1, 
-        uint256 participant1TransferredAmount,
-        uint256 participant1LockedAmount,
-        uint256 participant1LockNonce,
-        address participant2,
-        uint256 participant2TransferredAmount,
-        uint256 participant2LockedAmount,
-        uint256 participant2LockNonce
+        address participant, 
+        uint256 participantTransferredAmount,
+        uint256 participantLockedAmount,
+        uint256 participantLockNonce,
+        uint256 providerTransferredAmount,
+        uint256 providerLockedAmount,
+        uint256 providerLockNonce
     )
         public
+        isChannelClosed(participant)
     {
+        bytes32 channelIdentifier = getChannelIdentifier(participant);
+        Channel storage channel = identifier_to_channel[channelIdentifier];
+
+        require(block.number > channel.settleBlock, "settleWindow should be over");
+
+        verifyBalanceData (
+            channel.participantBalanceHash,
+            participantTransferredAmount,
+            participantLockedAmount,
+            participantLockNonce
+        );
+
+        verifyBalanceData (
+            channel.providerBalanceHash,
+            providerTransferredAmount,
+            providerLockedAmount,
+            providerLockNonce           
+        );
+
+        bytes32 lockIdentifier;
+        (
+            lockIdentifier,
+            participantLockedAmount,
+            providerLockedAmount
+        ) = settleLockData (
+            participant,
+            participantLockedAmount,
+            participantLockNonce,
+            providerLockedAmount,
+            providerLockNonce
+        );
+
+        require(channel.deposit + channel.inAmount - channel.outAmount >= 0, "channel balance should be positive");
+        require(channel.deposit + channel.inAmount - channel.outAmount >= participantLockedAmount + providerLockedAmount, "channel balance should be greater than locked amount");
+
+        identifier_to_lockedAmount[lockIdentifier][participant] = participantLockedAmount;
+        identifier_to_lockedAmount[lockIdentifier][provider] = providerLockedAmount;
+
+        uint256 transferToParticipantAmount;
+        uint256 transferToProviderAmount;
+
+        int256 providerDeposit;
+
+        if (channel.inAmount >= channel.outAmount) {
+            providerDeposit = channel.inAmount - channel.outAmount;
+        } else {
+            providerDeposit = 0 - int256(channel.outAmount - channel.inAmount);
+        }
+
+        uint256 margin;
+        uint256 min;
+        (
+            margin,
+            min
+        ) = magicSubstract (
+            participantTransferredAmount,
+            providerTransferredAmount
+        );
+
+        if (min == participantTransferredAmount) {
+            require(providerDeposit >= 0, "provider deposit should be positive");
+            require(uint256(providerDeposit) >= margin + providerLockedAmount, "provider balance should not be negative");
+
+            transferToProviderAmount = uint256(providerDeposit) - margin - providerLockedAmount;
+
+            require(channel.deposit + margin >= participantLockedAmount, "participant lock amount invalid");
+            transferToParticipantAmount = channel.deposit + margin - participantLockedAmount;
+        } else {
+            require(channel.deposit >= margin + participantLockedAmount, "participant not sufficient funds");
+            transferToParticipantAmount = channel.deposit - margin - participantLockedAmount;
+
+            if (providerDeposit >= 0) {
+                require(uint256(providerDeposit) + margin >= providerLockedAmount, "provider not sufficient funds");
+                transferToProviderAmount = uint256(providerDeposit) + margin - providerLockedAmount;
+            } else {
+                require(margin >= uint256(0 - providerDeposit), "provider not sufficient funds");
+                require(margin - uint256(0 - providerDeposit) >= providerLockedAmount, "provider not sufficient funds");
+                transferToProviderAmount = margin - uint256(0 - providerDeposit) - providerLockedAmount;
+            }
+        }
+
+        delete identifier_to_channel[channelIdentifier];
+        delete participant_to_counter[participant];
+
+        if (transferToParticipantAmount > 0) {
+            participant.transfer(transferToParticipantAmount);
+        }
+        if (transferToProviderAmount > 0) {
+            providerBalance += transferToProviderAmount;
+        }
+
         emit ChannelSettled (
             channelIdentifier, 
-            participant1, 
-            participant2, 
-            lockIdentifier, 
-            participant1TransferredAmount, participant2TransferredAmount
+            participant, 
+            participantTransferredAmount, 
+            providerTransferredAmount,
+            lockIdentifier
         );
     }
 
@@ -395,17 +592,15 @@ contract ETHChannel {
     }
 
     function getChannelIdentifier (
-        address participant, 
-        address partner
+        address participant
     ) 
         public
         view
         returns (bytes32)
     {
-        require(participant != 0x0 && partner != 0x0 && participant != partner, "invalid input");
+        require(participant != 0x0, "invalid input");
 
-        bytes32 participantsHash = getParticipantsHash(participant, partner);
-        uint256 counter = participantsHash_to_channelCounter[participantsHash];
+        uint256 counter = participant_to_counter[participantsHash];
 
         require(counter != 0, "channel does not exist");
 
@@ -479,7 +674,7 @@ contract ETHChannel {
         address indexed participant,
         uint256 transferToParticipantAmount, 
         uint256 transferToProviderAmount,
-        bytes32 lockedIdentifier,
+        bytes32 lockedIdentifier
     );
 
     event ChannelUnlocked (
@@ -568,5 +763,75 @@ contract ETHChannel {
             channel.outAmount = outAmount;
             channel.outNonce = outNonce;            
         }
+    }
+
+    function verifyBalanceData (
+        bytes32 balanceHash,
+        uint256 transferredAmount,
+        uint256 lockedAmount,
+        uint256 nonce
+    )
+        internal
+        pure
+    {
+        if (balanceHash == 0x0 && transferredAmount == 0x0 && lockedAmount == 0 && nonce == 0) {
+            return;
+        }
+
+        require(
+            keccak256(
+                abi.encodePacked(
+                    transferredAmount,
+                    lockedAmount,
+                    nonce
+                )
+            ) == balanceHash,
+            "invalid balance data"
+        );
+    }
+
+    function settleLockData (
+        address participant,
+        uint256 participantLockedAmount,
+        uint256 participantLockNonce,
+        uint256 providerLockedAmount,
+        uint256 providerLockNonce
+    )
+        internal
+        returns (bytes32 lockIdentifier, uint256 _participantLockedAmount, uint256 _providerLockedAmount)
+    {
+        if (participantLockNonce == 0 && providerLockNonce == 0) {
+            lockIdentifier = 0x0;
+            _participantLockedAmount = 0;
+            _providerLockedAmount = 0;
+            return;
+        }
+
+        bytes32 channelIdentifier = getChannelIdentifier(participant);
+
+        if (participantLockNonce == providerLockNonce) {
+            lockIdentifier = keccak256(abi.encodePacked(channelIdentifier, participantLockNonce));
+            _participantLockedAmount = participantLockedAmount;
+            _providerLockedAmount = providerLockedAmount;
+        } else if (participantLockNonce < providerLockNonce) {
+            lockIdentifier = keccak256(abi.encodePacked(channelIdentifier, providerLockNonce));
+            _participantLockedAmount = 0;
+            _providerLockedAmount = providerLockedAmount;
+        } else {
+            lockIdentifier = keccak256(abi.encodePacked(channelIdentifier, participantLockNonce));
+            _providerLockedAmount = 0;
+            _participantLockedAmount = participantLockedAmount;
+        }
+    }
+
+    function magicSubtract(
+        uint256 a,
+        uint256 b
+    )
+        internal
+        pure
+        returns (uint256, uint256)
+    {
+        return a > b ? (a - b, b) : (b - a, a);
     }
 }

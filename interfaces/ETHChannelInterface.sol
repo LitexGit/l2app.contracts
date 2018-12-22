@@ -105,7 +105,7 @@ interface ETHChannel {
         uint256 outNonce,
         bytes participantSignature,
         bytes outProviderSignature,
-        bytes participantDelegateSignature
+        bytes consignorSignature
     )
         public
     {
@@ -159,7 +159,7 @@ interface ETHChannel {
             participant, 
             participantTransferredAmount, 
             providerTransferredAmount,
-            lockIdentifier, 
+            lockIdentifier
         );
     }
 

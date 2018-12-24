@@ -165,7 +165,6 @@ interface ETHChannel {
 
     function unlock (
         address participant,
-        address provider,
         bytes32 lockIdentifier
     )
         public
@@ -174,7 +173,7 @@ interface ETHChannel {
             lockIdentifier,
             participant,
             participantTransferredAmount, 
-            providerTransferredAmount,
+            providerTransferredAmount
         );
     }
 

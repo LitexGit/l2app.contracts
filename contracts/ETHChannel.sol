@@ -576,18 +576,67 @@ contract ETHChannel {
     }
 
     function unlock (
-        address participant1,
-        address participant2,
+        address participant,
         bytes32 lockIdentifier
     )
         public
-    {   
+    {
+        uint256 participantLockedAmount = identifier_to_lockedAmount[lockIdentifier][participant];
+        uint256 providerLockedAmount = identifier_to_lockedAmount[lockIdentifier][provider];
+
+        delete identifier_to_lockedAmount[lockIdentifier][participant];
+        delete identifier_to_lockedAmount[lockIdentifier][provider];
+
+        bool isGameStateCommitted;
+        uint256 transferToParticipantAmount;
+        uint256 transferToProviderAmount;
+
+        (
+            isGameStateCommitted,
+            transferToParticipantAmount,
+            transferToProviderAmount
+        ) = game.getResult (
+            lockIdentifier,
+            participant,
+            provider
+        );
+
+        if (isGameStateCommitted) {
+            if (participantLockedAmount == 0) {
+                if (transferToParticipantAmount <= providerLockedAmount) {
+                    transferToProviderAmount = providerLockedAmount - transferToParticipantAmount;
+                } else {
+                    transferToParticipantAmount = providerLockedAmount;
+                    transferToProviderAmount = 0;
+                }
+            } else if (providerLockedAmount == 0) {
+                if (transferToProviderAmount <= participantLockedAmount) {
+                    transferToParticipantAmount = participantLockedAmount - transferToProviderAmount;
+                } else {
+                    transferToParticipantAmount = 0;
+                    transferToProviderAmount = participantLockedAmount;
+                }
+            } else {
+                require(transferToParticipantAmount + transferToProviderAmount == participantLockedAmount + providerLockedAmount, "invalid result");
+            }
+        } else {
+            transferToParticipantAmount = participantLockedAmount;
+            transferToProviderAmount = providerLockedAmount;
+        }
+
+        if (transferToParticipantAmount > 0) {
+            participant.transfer(transferToParticipantAmount);
+        }
+
+        if (transferToProviderAmount > 0) {
+            provider.transfer(transferToProviderAmount);
+        }
+
         emit ChannelUnlocked (
             lockIdentifier,
-            participant1,
-            participant2,
-            transferredAmount1,
-            transferredAmount2
+            participant,
+            transferToParticipantAmount,
+            transferToProviderAmount
         );
     }
 

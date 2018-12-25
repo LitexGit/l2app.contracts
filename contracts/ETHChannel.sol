@@ -1,6 +1,6 @@
 pragma solidity ^0.4.24;
 
-import "./GameBase.sol";
+import "./GameInterface.sol";
 import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
 import "openzeppelin-solidity/contracts/utils/Address.sol";
 
@@ -11,7 +11,7 @@ contract ETHChannel {
         States
      */
     
-    GameBase public game;
+    GameInterface public game;
 
     address public regulator;
 
@@ -61,7 +61,14 @@ contract ETHChannel {
 
     mapping (bytes32 => Channel) public identifier_to_channel;
 
-    mapping (bytes32 => mapping (address => uint256)) identifier_to_lockedAmount;
+    struct LockedAmount {
+        address participant;
+        address puppet;
+        uint256 participantAmount;
+        uint256 providerAmount;
+    }
+
+    mapping (bytes32 => LockedAmount) identifier_to_lockedAmount;
 
     /**
         Constructor
@@ -224,6 +231,8 @@ contract ETHChannel {
         require(msg.sender == participant, "only participant can trigger");
 
         bytes32 channelIdentifier = getChannelIdentifier(participant);
+                
+        Channel storage channel = identifier_to_channel[channelIdentifier];
 
         bytes32 messageHash = keccak256(
             abi.encodePacked(
@@ -234,16 +243,14 @@ contract ETHChannel {
                 lastCommitBlock
             ) 
         );
-        require(ECDSA.recover(messageHash, participantSignature) == participant, "invalid participant signature");
+        require(ECDSA.recover(messageHash, participantSignature) == channel.puppet, "invalid participant signature");
         require(ECDSA.recover(messageHash, providerSignature) == provider, "invalid provider signature");
         require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invalid regulator signature");
 
-        Channel storage channel = identifier_to_channel[channelIdentifier];
-
         if (balance >= channel.deposit) {
-            providerBalance -= balance - channel.deposit;
+            providerBalance -= int256(balance - channel.deposit);
         } else {
-            providerBalance += channel.deposit - balance;
+            providerBalance += int256(channel.deposit - balance);
         }
 
         delete identifier_to_channel[channelIdentifier];
@@ -287,7 +294,7 @@ contract ETHChannel {
             partnerSignature
         );
 
-        if (recoveredPartner == participant) {
+        if (recoveredPartner == channel.puppet) {
             require(msg.sender == provider, "only provider can trigger");
             if (nonce > 0) {
                 channel.participantBalanceHash = balanceHash;
@@ -382,7 +389,7 @@ contract ETHChannel {
         address recoveredConsignor = ECDSA.recover(messageHash, consignorSignature);
 
         if (channel.isCloser) {
-            require(recoveredPartner == participant, "invalid partner signature");
+            require(recoveredPartner == channel.puppet, "invalid partner signature");
             require(recoveredConsignor == provider, "invalid consignor signature");
 
             if (nonce > channel.participantNonce) {
@@ -391,7 +398,7 @@ contract ETHChannel {
             }
         } else {
             require(recoveredPartner == provider, "invalid partner signature");
-            require(recoveredConsignor == participant, "invalid consignor signature");
+            require(recoveredConsignor == channel.puppet, "invalid consignor signature");
 
             if (nonce > channel.providerNonce) {
                 channel.providerNonce = nonce;
@@ -510,8 +517,11 @@ contract ETHChannel {
         require(channel.deposit + channel.inAmount - channel.outAmount >= 0, "channel balance should be positive");
         require(channel.deposit + channel.inAmount - channel.outAmount >= participantLockedAmount + providerLockedAmount, "channel balance should be greater than locked amount");
 
-        identifier_to_lockedAmount[lockIdentifier][participant] = participantLockedAmount;
-        identifier_to_lockedAmount[lockIdentifier][provider] = providerLockedAmount;
+        LockedAmount storage lockedAmount = identifier_to_lockedAmount[lockIdentifier];
+        lockedAmount.participant = participant;
+        lockedAmount.puppet = channel.puppet;
+        lockedAmount.participantAmount = participantLockedAmount;
+        lockedAmount.providerAmount = providerLockedAmount;
 
         uint256 transferToParticipantAmount;
         uint256 transferToProviderAmount;
@@ -519,10 +529,12 @@ contract ETHChannel {
         int256 providerDeposit;
 
         if (channel.inAmount >= channel.outAmount) {
-            providerDeposit = channel.inAmount - channel.outAmount;
+            providerDeposit = int256(channel.inAmount - channel.outAmount);
         } else {
             providerDeposit = 0 - int256(channel.outAmount - channel.inAmount);
         }
+
+        providerBalance -= providerDeposit;
 
         uint256 margin;
         uint256 min;
@@ -576,16 +588,17 @@ contract ETHChannel {
     }
 
     function unlock (
-        address participant,
         bytes32 lockIdentifier
     )
         public
     {
-        uint256 participantLockedAmount = identifier_to_lockedAmount[lockIdentifier][participant];
-        uint256 providerLockedAmount = identifier_to_lockedAmount[lockIdentifier][provider];
+        LockedAmount storage lockedAmount = identifier_to_lockedAmount[lockIdentifier];
+        address participant = lockedAmount.participant;
+        address puppet = lockedAmount.puppet;
+        uint256 participantLockedAmount = lockedAmount.participantAmount;
+        uint256 providerLockedAmount = lockedAmount.providerAmount;
 
-        delete identifier_to_lockedAmount[lockIdentifier][participant];
-        delete identifier_to_lockedAmount[lockIdentifier][provider];
+        delete identifier_to_lockedAmount[lockIdentifier];
 
         bool isGameStateCommitted;
         uint256 transferToParticipantAmount;
@@ -597,7 +610,7 @@ contract ETHChannel {
             transferToProviderAmount
         ) = game.getResult (
             lockIdentifier,
-            participant,
+            puppet,
             provider
         );
 
@@ -629,7 +642,7 @@ contract ETHChannel {
         }
 
         if (transferToProviderAmount > 0) {
-            provider.transfer(transferToProviderAmount);
+            providerBalance += transferToProviderAmount;
         }
 
         emit ChannelUnlocked (
@@ -807,7 +820,7 @@ contract ETHChannel {
                     outNonce
                 )
             );
-            require(ECDSA.recover(messageHash, participantSignature) == channel.participant, "invalid participant signature");
+            require(ECDSA.recover(messageHash, participantSignature) == channel.puppet, "invalid participant signature");
             require(ECDSA.recover(messageHash, outProviderSignature) == provider, "invalid outProvider signature");
             channel.outAmount = outAmount;
             channel.outNonce = outNonce;            

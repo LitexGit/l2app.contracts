@@ -1,6 +1,6 @@
 pragma solidity ^0.4.24
 
-interface Randoms {
+interface RandomInterface {
     function initiatorCommit (
         bytes32 identifier,
         address initiator,

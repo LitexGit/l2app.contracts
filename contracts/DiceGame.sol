@@ -2,6 +2,7 @@ pragma solidity ^0.4.24;
 
 import "openzeppelin-solidity/contracts/utils/Address.sol";
 import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
+import "./RandomInterface.sol";
 
 
 contract DiceGame {
@@ -89,12 +90,16 @@ contract DiceGame {
         );
     }
 
+    /**
+        External Methods
+     */
+
     function getResult (
         bytes32 identifier,
         address participant1,
         address particiapant2
     )
-        public
+        external
         returns (
             bool isCommitted,
             uint256 amount1,

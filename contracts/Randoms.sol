@@ -1,4 +1,6 @@
-pragma solidity ^0.4.24
+pragma solidity ^0.4.24;
+
+import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
 
 contract Randoms {
     /**
@@ -85,7 +87,11 @@ contract Randoms {
 
         RandomState storage random = identifier_to_random[randomIdentifier];
 
-        require(random.status == 0, "already committed");
+        require(random.status != 2, "already finalized");
+
+        if (random.status == 1) {
+            require(block.number <= random.lastRevealBlock, "commit block expired");
+        }
 
         random.status = 2;
         random.random = keccak256(abi.encodePacked(initiatorRandom, acceptorRandom));
@@ -96,7 +102,7 @@ contract Randoms {
             acceptor,
             initiatorRandom,
             acceptorRandom, 
-            random,
+            random.random,
             randomIdentifier
         );
     }
@@ -166,8 +172,6 @@ contract Randoms {
 
         emit InitiatorRevealed (
             randomIdentifier,
-            initiator,
-            acceptor,
             initiatorRandom,
             random.acceptorRandom,
             random.random
@@ -177,7 +181,7 @@ contract Randoms {
     function getRandom (
         bytes32 identifier,
         address participant1,
-        address participant2,
+        address participant2
     )
         public
         view
@@ -224,8 +228,6 @@ contract Randoms {
 
     event InitiatorRevealed (
         bytes32 indexed identifier,
-        address indexed initiator,
-        address indexed acceptor,
         bytes32 initiatorRandom,
         bytes32 acceptorRandom,
         bytes32 random

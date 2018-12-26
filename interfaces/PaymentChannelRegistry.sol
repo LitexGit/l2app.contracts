@@ -1,8 +1,8 @@
-pragma solididy ^0.4.24
+pragma solididy ^0.4.24;
 
-import "./ERC20Channel.sol"
-import "./ETHChannel.sol"
-import "openzeppelin-solidity/contracts/utils/Address.sol"
+import "./ERC20Channel.sol";
+import "./ETHChannel.sol";
+import "openzeppelin-solidity/contracts/utils/Address.sol";
 
 contract PaymentChannelRegistry {
     using Address for address;

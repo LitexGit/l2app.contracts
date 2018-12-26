@@ -4,7 +4,6 @@ import "openzeppelin-solidity/contracts/utils/Address.sol";
 import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
 import "./RandomInterface.sol";
 
-
 contract DiceGame {
     using Address for address;
 
@@ -97,7 +96,7 @@ contract DiceGame {
     function getResult (
         bytes32 identifier,
         address participant1,
-        address particiapant2
+        address participant2
     )
         external
         returns (
@@ -113,7 +112,7 @@ contract DiceGame {
             return;
         }
 
-        require(gameState.initiator != 0x0 && gameState.acceptor != 0x0 && initiator != acceptor, "invalid game state");
+        require(gameState.initiator != 0x0 && gameState.acceptor != 0x0 && gameState.initiator != gameState.acceptor, "invalid game state");
 
         uint8 randomStatus;
         bytes32 random;
@@ -139,14 +138,14 @@ contract DiceGame {
         if (randomStatus == 2) {
             uint256 dice = uint256(random) % gameState.modulo;
 
-            if (modulo <= MAX_MASK_MODULO) {
-                if (((2 ** dice) & uint40(betMask)) != 0) {
+            if (gameState.modulo <= MAX_MASK_MODULO) {
+                if (((2 ** dice) & uint40(gameState.betMask)) != 0) {
                     winner = gameState.initiator;
                 } else {
                     winner = gameState.acceptor;
                 }
             } else {
-                if (dice < betMask) {
+                if (dice < gameState.betMask) {
                     winner = gameState.initiator;
                 } else {
                     winner = gameState.acceptor;

@@ -1,6 +1,6 @@
 pragma solidity ^0.4.24;
 
-import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
+import "./ECDSA.sol";
 
 contract Randoms {
     /**

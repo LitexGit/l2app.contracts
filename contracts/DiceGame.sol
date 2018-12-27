@@ -1,7 +1,7 @@
 pragma solidity ^0.4.24;
 
-import "openzeppelin-solidity/contracts/utils/Address.sol";
-import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
+import "./Address.sol";
+import "./ECDSA.sol";
 import "./RandomInterface.sol";
 
 contract DiceGame {

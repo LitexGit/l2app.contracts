@@ -1,8 +1,8 @@
 pragma solidity ^0.4.24;
 
 import "./GameInterface.sol";
-import "openzeppelin-solidity/contracts/cryptography/ECDSA.sol";
-import "openzeppelin-solidity/contracts/utils/Address.sol";
+import "./ECDSA.sol";
+import "./Address.sol";
 
 contract ETHChannel {  
     using Address for address;
@@ -85,8 +85,8 @@ contract ETHChannel {
     {
         require(_game.isContract(), "invalid game contract");
         require(_provider.isContract() == false, "provider should be a external address");
-        require(settleWindowMin > 0);
-        require(settleWindowMax > settleWindowMin);
+        require(_settleWindowMin > 0);
+        require(_settleWindowMax > _settleWindowMin);
 
         game = GameInterface(_game);
         regulator = _regulator;
@@ -282,38 +282,16 @@ contract ETHChannel {
         bytes outProviderSignature
     )
         public
-        isChannelOpened(participant)
+       // isChannelOpened(participant)
     {
         bytes32 channelIdentifier = getChannelIdentifier(participant);
-        Channel storage channel = identifier_to_channel[channelIdentifier];
-
-        address recoveredPartner = recoverBalanceSignature (
-            channelIdentifier,
+        
+        closeChannelSplit (
+            participant,
             balanceHash,
             nonce,
             partnerSignature
         );
-
-        if (recoveredPartner == channel.puppet) {
-            require(msg.sender == provider, "only provider can trigger");
-            if (nonce > 0) {
-                channel.participantBalanceHash = balanceHash;
-                channel.participantNonce = nonce;
-            }
-            channel.isCloser = false;
-        } else if (recoveredPartner == provider) {
-            require(msg.sender == participant, "only participant can trigger");
-            if (nonce > 0) {
-                channel.providerBalanceHash = balanceHash;
-                channel.providerNonce = nonce;
-            }
-            channel.isCloser = true;
-        } else {
-            revert("invalid partner signature");
-        }
-
-        channel.status = 2;
-        channel.settleBlock += uint256(block.number);
 
         updateRebalanceProof (
             channelIdentifier,
@@ -355,22 +333,10 @@ contract ETHChannel {
         bytes consignorSignature
     )
         public
-        isChannelClosed(participant)
+        //isChannelClosed(participant)
     {
         bytes32 channelIdentifier = getChannelIdentifier(participant);
-        Channel storage channel = identifier_to_channel[channelIdentifier];
-
-        require(channel.status == 2, "channel should be closed");
-
-        require(block.number <= channel.settleBlock, "commit block expired");
-
-        address recoveredPartner = recoverBalanceSignature (
-            channelIdentifier,
-            balanceHash,
-            nonce,
-            partnerSignature
-        );
-
+        
         bytes32 messageHash = keccak256(
             abi.encodePacked(
                 address(this),
@@ -389,46 +355,25 @@ contract ETHChannel {
             )
         );
 
-        address recoveredConsignor = ECDSA.recover(keccak256(
-            abi.encodePacked(
-                    address(this),
-                    getChannelIdentifier(participant),
-                    balanceHash,
-                    nonce,
-                    partnerSignature,
-                    inAmount,
-                    inNonce,
-                    regulatorSignature,
-                    inProviderSignature,
-                    outAmount,
-                    outNonce,
-                    participantSignature,
-                    outProviderSignature
-                )
-            ), 
+        partnerUpdateProofSplit (
+            participant,
+            balanceHash,
+            nonce,
+            partnerSignature,
+            messageHash,
             consignorSignature
         );
 
-        if (channel.isCloser) {
-            require(recoveredPartner == channel.puppet, "invalid partner signature");
-            require(recoveredConsignor == provider, "invalid consignor signature");
-
-            if (nonce > channel.participantNonce) {
-                channel.participantNonce = nonce;
-                channel.participantBalanceHash = balanceHash;
-            }
-        } else {
-            require(recoveredPartner == provider, "invalid partner signature");
-            require(recoveredConsignor == channel.puppet, "invalid consignor signature");
-
-            if (nonce > channel.providerNonce) {
-                channel.providerNonce = nonce;
-                channel.providerBalanceHash = balanceHash;
-            }        
-        }
+        // partnerUpdateProofSplit2 (
+        //     participant,
+        //     balanceHash,
+        //     nonce,
+        //     partnerSignature,
+        //     recoveredConsignor
+        // );
 
         updateRebalanceProof (
-            getChannelIdentifier(participant),
+            channelIdentifier,
             inAmount,
             inNonce,
             regulatorSignature,
@@ -440,16 +385,16 @@ contract ETHChannel {
         );
 
         emit PartnerUpdateProof (
-            getChannelIdentifier(participant), 
+            channelIdentifier, 
             participant, 
-            channel.participantBalanceHash,
-            channel.participantNonce,
-            channel.providerBalanceHash,
-            channel.providerNonce,
-            channel.inAmount,
-            channel.inNonce,
-            channel.outAmount,
-            channel.outNonce
+            identifier_to_channel[channelIdentifier].participantBalanceHash,
+            identifier_to_channel[channelIdentifier].participantNonce,
+            identifier_to_channel[channelIdentifier].providerBalanceHash,
+            identifier_to_channel[channelIdentifier].providerNonce,
+            identifier_to_channel[channelIdentifier].inAmount,
+            identifier_to_channel[channelIdentifier].inNonce,
+            identifier_to_channel[channelIdentifier].outAmount,
+            identifier_to_channel[channelIdentifier].outNonce
         );
     }
 
@@ -505,7 +450,7 @@ contract ETHChannel {
         uint256 providerLastCommitBlock
     )
         public
-        isChannelClosed(participant)
+  //      isChannelClosed(participant)
     {
         bytes32 channelIdentifier = getChannelIdentifier(participant);
         Channel storage channel = identifier_to_channel[channelIdentifier];
@@ -554,8 +499,8 @@ contract ETHChannel {
             lockedAmount.providerAmount = providerLockedAmount;
         }
 
-        uint256 transferToParticipantAmount;
-        uint256 transferToProviderAmount;
+       // uint256 transferToParticipantAmount;
+       // uint256 transferToProviderAmount;
 
         int256 providerDeposit;
 
@@ -567,46 +512,46 @@ contract ETHChannel {
 
         providerBalance -= providerDeposit;
 
-        uint256 margin;
-        uint256 min;
+        //uint256 participantLockNonce;
+        //uint256 providerLockNonce;
         (
-            margin,
-            min
+            participantLockNonce,
+            providerLockNonce
         ) = magicSubtract (
             participantTransferredAmount,
             providerTransferredAmount
         );
 
-        if (min == participantTransferredAmount) {
+        if (providerLockNonce == participantTransferredAmount) {
             require(providerDeposit >= 0, "provider deposit should be positive");
-            require(uint256(providerDeposit) >= margin + providerLockedAmount, "provider balance should not be negative");
+            require(uint256(providerDeposit) >= participantLockNonce + providerLockedAmount, "provider balance should not be negative");
 
-            transferToProviderAmount = uint256(providerDeposit) - margin - providerLockedAmount;
+            providerTransferredAmount = uint256(providerDeposit) - participantLockNonce - providerLockedAmount;
 
-            require(channel.deposit + margin >= participantLockedAmount, "participant lock amount invalid");
-            transferToParticipantAmount = channel.deposit + margin - participantLockedAmount;
+            require(channel.deposit + participantLockNonce >= participantLockedAmount, "participant lock amount invalid");
+            participantTransferredAmount = channel.deposit + participantLockNonce - participantLockedAmount;
         } else {
-            require(channel.deposit >= margin + participantLockedAmount, "participant not sufficient funds");
-            transferToParticipantAmount = channel.deposit - margin - participantLockedAmount;
+            require(channel.deposit >= participantLockNonce + participantLockedAmount, "participant not sufficient funds");
+            participantTransferredAmount = channel.deposit - participantLockNonce - participantLockedAmount;
 
             if (providerDeposit >= 0) {
-                require(uint256(providerDeposit) + margin >= providerLockedAmount, "provider not sufficient funds");
-                transferToProviderAmount = uint256(providerDeposit) + margin - providerLockedAmount;
+                require(uint256(providerDeposit) + participantLockNonce >= providerLockedAmount, "provider not sufficient funds");
+                providerTransferredAmount = uint256(providerDeposit) + participantLockNonce - providerLockedAmount;
             } else {
-                require(margin >= uint256(0 - providerDeposit), "provider not sufficient funds");
-                require(margin - uint256(0 - providerDeposit) >= providerLockedAmount, "provider not sufficient funds");
-                transferToProviderAmount = margin - uint256(0 - providerDeposit) - providerLockedAmount;
+                require(participantLockNonce >= uint256(0 - providerDeposit), "provider not sufficient funds");
+                require(participantLockNonce - uint256(0 - providerDeposit) >= providerLockedAmount, "provider not sufficient funds");
+                providerTransferredAmount = participantLockNonce - uint256(0 - providerDeposit) - providerLockedAmount;
             }
         }
 
         delete identifier_to_channel[channelIdentifier];
         delete participant_to_counter[participant];
 
-        if (transferToParticipantAmount > 0) {
-            participant.transfer(transferToParticipantAmount);
+        if (participantTransferredAmount > 0) {
+            participant.transfer(participantTransferredAmount);
         }
-        if (transferToProviderAmount > 0) {
-            providerBalance += int256(transferToProviderAmount);
+        if (providerTransferredAmount > 0) {
+            providerBalance += int256(providerTransferredAmount);
         }
 
         emit ChannelSettled (
@@ -793,6 +738,48 @@ contract ETHChannel {
     /**
         Internal Methods
      */
+
+    function closeChannelSplit (
+        address participant,
+        bytes32 balanceHash, 
+        uint256 nonce, 
+        bytes partnerSignature
+    )
+        internal 
+    {
+        bytes32 channelIdentifier = getChannelIdentifier(participant);
+        Channel storage channel = identifier_to_channel[channelIdentifier];
+
+        require(channel.status == 1, "channel should be open");
+
+        address recoveredPartner = recoverBalanceSignature (
+            channelIdentifier,
+            balanceHash,
+            nonce,
+            partnerSignature
+        );
+
+        if (recoveredPartner == channel.puppet) {
+            require(msg.sender == provider, "only provider can trigger");
+            if (nonce > 0) {
+                channel.participantBalanceHash = balanceHash;
+                channel.participantNonce = nonce;
+            }
+            channel.isCloser = false;
+        } else if (recoveredPartner == provider) {
+            require(msg.sender == participant, "only participant can trigger");
+            if (nonce > 0) {
+                channel.providerBalanceHash = balanceHash;
+                channel.providerNonce = nonce;
+            }
+            channel.isCloser = true;
+        } else {
+            revert("invalid partner signature");
+        }
+
+        channel.status = 2;
+        channel.settleBlock += uint256(block.number);
+    }
     
     function recoverBalanceSignature (
         bytes32 channelIdentifier,
@@ -813,6 +800,108 @@ contract ETHChannel {
             )
         );
         return ECDSA.recover(messageHash, signature);
+    }
+
+    // function partnerUpdateProofSplit1 (
+    //     address participant,
+    //     bytes32 balanceHash, 
+    //     uint256 nonce, 
+    //     bytes partnerSignature,
+    //     uint256 inAmount,
+    //     uint256 inNonce,
+    //     bytes regulatorSignature,
+    //     bytes inProviderSignature,
+    //     uint256 outAmount,
+    //     uint256 outNonce,
+    //     bytes participantSignature,
+    //     bytes outProviderSignature,
+    //     bytes consignorSignature
+    // )
+    //     internal
+    //     returns (address)
+    // {
+    //     bytes32 channelIdentifier = getChannelIdentifier(participant);
+    //     // bytes32 messageHash = keccak256(
+    //     //     abi.encodePacked(
+    //     //         address(this),
+    //     //         channelIdentifier,
+    //     //         balanceHash,
+    //     //         nonce,
+    //     //         partnerSignature,
+    //     //         inAmount,
+    //     //         inNonce,
+    //     //         regulatorSignature,
+    //     //         inProviderSignature,
+    //     //         outAmount,
+    //     //         outNonce,
+    //     //         participantSignature,
+    //     //         outProviderSignature
+    //     //     )
+    //     // );
+
+    //     return ECDSA.recover(keccak256(
+    //             abi.encodePacked(
+    //                 address(this),
+    //                 channelIdentifier,
+    //                 balanceHash,
+    //                 nonce,
+    //                 partnerSignature,
+    //                 inAmount,
+    //                 inNonce,
+    //                 regulatorSignature,
+    //                 inProviderSignature,
+    //                 outAmount,
+    //                 outNonce,
+    //                 participantSignature,
+    //                 outProviderSignature
+    //             )
+    //         ), consignorSignature);
+
+    // }
+
+    function partnerUpdateProofSplit (
+        address participant,
+        bytes32 balanceHash,
+        uint256 nonce,
+        bytes partnerSignature,
+        bytes32 messageHash,
+        bytes consignorSignature
+    )
+        internal
+    {
+        address recoveredConsignor = ECDSA.recover(messageHash, consignorSignature);
+        
+        bytes32 channelIdentifier = getChannelIdentifier(participant);
+        Channel storage channel = identifier_to_channel[channelIdentifier];
+
+        require(channel.status == 2, "channel should be closed");
+
+        require(block.number <= channel.settleBlock, "commit block expired");
+
+        address recoveredPartner = recoverBalanceSignature (
+            channelIdentifier,
+            balanceHash,
+            nonce,
+            partnerSignature
+        );
+
+        if (channel.isCloser) {
+            require(recoveredPartner == channel.puppet, "invalid partner signature");
+            require(recoveredConsignor == provider, "invalid consignor signature");
+
+            if (nonce > channel.participantNonce) {
+                channel.participantNonce = nonce;
+                channel.participantBalanceHash = balanceHash;
+            }
+        } else {
+            require(recoveredPartner == provider, "invalid partner signature");
+            require(recoveredConsignor == channel.puppet, "invalid consignor signature");
+
+            if (nonce > channel.providerNonce) {
+                channel.providerNonce = nonce;
+                channel.providerBalanceHash = balanceHash;
+            }        
+        }
     }
 
     function updateRebalanceProof (

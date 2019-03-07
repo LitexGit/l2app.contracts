@@ -1,11 +1,15 @@
 pragma solidity >=0.4.24 <0.6.0;
 
 import "./lib/ECDSA.sol";
+import "./lib/Address.sol";
 
 contract OffchainPayment {
     /**
     States
      */
+    using Address for address;
+
+    address public operator;
 
     // payment contract address on ethereum
     address public onchainPayment;
@@ -37,7 +41,7 @@ contract OffchainPayment {
     mapping (bytes32 => RebalanceProof) public rebalanceProofMap;
     struct Channel {
         address user;
-        address token; 
+        address token;
         uint256 userDeposit;
         uint256 userWithdraw;
         // user offchain balance
@@ -86,7 +90,7 @@ contract OffchainPayment {
     //     bytes regulatorSignature;
     // }
 
-    
+
     // id => user withdraw proof
     mapping (bytes32 => UserWithdrawProof) public userWithdrawProofMap;
     struct UserWithdrawProof {
@@ -130,6 +134,24 @@ contract OffchainPayment {
         bytes signature;
     }
 
+    struct LockedAsset {
+        bool locked;
+        //1 = provider's withdraw asset
+        //2 = user's withdraw asset
+        uint8 assetType;
+        uint256 deltaAmount;
+    }
+
+
+    // id => locked asset
+    mapping (bytes32 => LockedAsset) public lockedAssetMap;
+
+
+    modifier isOperator (address caller) {
+        require(caller == operator, "only operator can call this function");
+        _;
+    }
+
     /**
     Constructor
      */
@@ -144,6 +166,7 @@ contract OffchainPayment {
         onchainPayment = _onchainPayment;
         provider = _provider;
         regulator = _regulator;
+        operator = _regulator;
     }
 
     /**
@@ -250,7 +273,7 @@ contract OffchainPayment {
                 onchainPayment,
                 token,
                 amount,
-                nonce   
+                nonce
             )
         );
         require(ECDSA.recover(messageHash, signature) == provider);
@@ -299,7 +322,7 @@ contract OffchainPayment {
         bytes memory signature
     )
         public
-    {}   
+    {}
 
     // @param balance balance after withdraw
     function providerProposeWithdraw (
@@ -316,7 +339,7 @@ contract OffchainPayment {
         bytes memory signature
     )
         public
-    {} 
+    {}
 
     // @param amount total withdraw amount
     function proposeRebalance (
@@ -393,87 +416,330 @@ contract OffchainPayment {
     function onchainOpenChannel (
         address user,
         address token,
-        uint256 settleWindow,
-        bytes32 channelID
-    ) 
+        /* uint256 settleWindow, */
+        bytes32 channelID,
+        uint256 amount
+    )
+        isOperator(msg.sender)
         public
-    {}
+    {
+
+        /* require(token.isContract() == true, "invalid token address"); */
+        //find channel by getChannelID
+        // new a channel struct, add it to mapping
+
+        Channel storage channel = channelMap[channelID];
+        require(channel.status == 0, "channel status should be init");
+
+        channel.status = 1;
+        channel.user = user;
+        channel.token = token;
+        channel.userDeposit = amount;
+        channel.userWithdraw = 0;
+        channel.userBalance = amount;
+        channel.providerBalance = 0;
+
+        // modify payment network data
+
+        PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
+        paymentNetwork.userCount = paymentNetwork.userCount + 1;
+        paymentNetwork.userTotalDeposit = paymentNetwork.userTotalDeposit + amount;
+
+
+    }
 
     function onchainAddPuppet (
         address user,
         address puppet
-    ) 
+    )
+        isOperator(msg.sender)
         public
-    {}
+    {
+        // find puppet
+        Puppet[] puppetList = puppets[user];
+
+        // if exist, change enabled to true
+        /* puppet.enabled = true; */
+
+        // if not exist add one
+
+        puppetList.push(Puppet(puppet, true));
+
+
+    }
 
     function onchainDisablePuppet (
         address user,
         address puppet
-    ) 
+    )
+        isOperator(msg.sender)
         public
-    {}
+    {
+        // find puppets
+        Puppet[] puppetList = puppets[user];
+
+        // disable it
+        /* puppet.enabled = false; */
+
+    }
 
     function onchainUserDeposit (
         bytes32 channelID,
         address user,
-        uint256 amount
-    ) 
+        uint256 deposit
+    )
+        isOperator(msg.sender)
         public
-    {}
+    {
+        // find channel
+        Channel storage channel = channelMap[channelID];
+        require(channel.status == 1, "channel should be open");
+        require(channel.userDeposit < deposit, "new deposit should greater than old deposit");
+
+        // set channel user Deposit
+
+        uint256 deltaDeposit = deposit - channel.userDeposit;
+        channel.userDeposit = deposit;
+
+        // calculate deltaDeposit, add deltaDeposit to paymentNetwork.userTotalDeposit
+        PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
+        paymentNetwork.userTotalDeposit = paymentNetwork.userTotalDeposit + deltaDeposit;
+
+    }
+
 
     function onchainProviderDeposit (
         address token,
         uint256 amount
-    ) 
+    )
+        isOperator(msg.sender)
         public
-    {}
+    {
+        // find payment network
+        /* require(token.isContract() == true, "invalid token address"); */
+
+        PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
+        // set provider deposit
+
+        paymentNetwork.providerDeposit = paymentNetwork.providerDeposit + amount;
+        paymentNetwork.providerBalance = paymentNetwork.providerBalance + amount;
+
+    }
 
     function onchainUserWithdraw (
         bytes32 channelID,
         uint256 amount,
+        uint256 withdraw,
         uint256 lastCommitBlock
-    ) 
+    )
+        isOperator(msg.sender)
         public
-    {}
+    {
+        // find channel
+
+        Channel storage channel = channelMap[channelID];
+        require(channel.status == 1, "channel should be open");
+        require(channel.userWithdraw <= withdraw, "new withdraw should greater than old withdraw");
+
+        // set channel user withdrawAmount
+        channel.userWithdraw = withdraw;
+        // calculate deltaWithdrawAmount, add it to PaymentNetwork.userTotalWithdraw
+
+        // destroy locked assets
+        bytes32 lockId = keccak256(abi.encodePacked(
+                channelID,
+                amount,
+                withdraw,
+                lastCommitBlock
+            ));
+
+        if (lockedAssetMap[lockId].locked == true){
+            delete lockedAssetMap[lockId];
+        } else {
+            PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
+            paymentNetwork.userTotalWithdraw = paymentNetwork.userTotalWithdraw + amount;
+      }
+
+    }
 
     function onchainProviderWithdraw (
         address token,
         uint256 amount,
         uint256 lastCommitBlock
-    ) 
+    )
+        isOperator(msg.sender)
         public
-    {}
+    {
+        /* require(token.isContract() == true, "invalid token address"); */
+        // find payment PaymentNetwork
+        // set providerWithdraw
+
+        // destroy locked assets
+        bytes32 lockId = keccak256(abi.encodePacked(
+                token,
+                amount,
+                lastCommitBlock
+            ));
+
+        if (lockedAssetMap[lockId].locked == true){
+            delete lockedAssetMap[lockId];
+        } else {
+            PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
+            paymentNetwork.providerWithdraw = paymentNetwork.providerWithdraw + amount;
+            paymentNetwork.providerBalance = paymentNetwork.providerBalance - amount;
+        }
+
+    }
+
+    function onchainCooperativeSettleChannel(
+        bytes32 channelID,
+        address user,
+        uint256 balance,
+        uint256 lastCommitBlock
+    )
+    isOperator(msg.sender)
+    public {
+        Channel storage channel = channelMap[channelID];
+        require(channel.status == 1, "channel should be open");
+
+        channel.status = 3;
+        /* channel.closingData.closer = user; */
+
+        PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
+
+
+
+        //TODO: unlockAsset
+
+    }
 
     function onchainCloseChannel (
         bytes32 channelID,
-        address closer
-    ) 
+        address closer,
+        uint256 balance,
+        uint256 nonce,
+        uint256 inAmount
+    )
+        isOperator(msg.sender)
         public
-    {}
+    {
+      // find channel
+      Channel storage channel = channelMap[channelID];
+      require(channel.status == 1, "channel should be open");
+
+      // set status to close
+      channel.status = 2;
+
+      /* channel.closingData.closer = closer;
+      if (closer == channel.user ) {
+        channel.closingData.providerTransferredAmount = balance;
+        channel.closingData.providerTransferredNonce = nonce;
+
+      } else {
+        channel.closingData.userTransferredAmount = balance;
+        channel.closingData.userTransferredNonce = nonce;
+
+      }
+      channel.closingData.providerRebalanceInAmount = inAmount; */
+
+    }
 
     function onchainPartnerUpdateProof (
-        bytes32 channelID
-    ) 
+        bytes32 channelID,
+        uint256 userBalance,
+        uint256 userNonce,
+        uint256 providerBalance,
+        uint256 providerNonce
+    )
+        isOperator(msg.sender)
         public
-    {}
+    {
+      // find channel
+      Channel storage channel = channelMap[channelID];
+      require(channel.status == 2, "channel should be close");
+
+      /* channel.closingData.providerTransferredAmount = providerBalance;
+      channel.closingData.providerTransferredNonce = providerNonce;
+      channel.closingData.userTransferredAmount = userBalance;
+      channel.closingData.userTransferredNonce = userNonce; */
+
+    }
 
     function onchainRegulatorUpdateProof (
-        bytes32 channelID
-    ) 
+        bytes32 channelID,
+        uint256 inAmount
+    )
+        isOperator(msg.sender)
         public
-    {}
+    {
+      // find channel
+      Channel storage channel = channelMap[channelID];
+      require(channel.status == 2, "channel should be close");
+      // set status
+      /* channel.closingData.providerRebalanceInAmount = inAmount; */
+
+    }
 
     function onchainSettleChannel (
         bytes32 channelID,
         uint256 userSettleAmount,
         uint256 providerSettleAmount
-    ) 
+    )
+        isOperator(msg.sender)
         public
-    {}
+    {
+      // find channel
+      Channel storage channel = channelMap[channelID];
+      require(channel.status == 2, "channel should be close");
+      // set status, settled
+      channel.status = 3;
+
+      // TODO: change channel data && paymentNetwork data
+      // check userSettleAmount & providerSettleAmount
+      // set paymentNetwork.userCount/userTotalDeposit/userTotalWithdraw/providerBalance/providerRebalanceIn
+
+    }
+
+
+    function setOperator(
+      address newOperator
+      )
+    /* isOperator(msg.sender) */
+    public {
+
+      /* require(newOperator.isContract() == true, "invalid contract address"); */
+      require(newOperator != operator, "change operator to the same address");
+
+      emit OperatorChanged(
+        operator,
+        newOperator
+        );
+      operator = newOperator;
+
+    }
+
+    function unlockAsset(
+      bytes32[] lockIds
+    )
+    public {
+        // how to get currentBlockNumber ? Operator sync blockNumber?
+        uint256 i = 0;
+        while (i < lockIds.length) {
+            //TODO: find lockId, check currentBlockNumber > lastCommitBlock
+            delete lockedAssetMap[lockIds[i]];
+            i += 1;
+        }
+
+    }
 
     /**
      Events
      */
+
+    event OperatorChanged (
+      address indexed oldOperator,
+      address indexed newOperator
+      );
 
     event Transfer (
         address indexed from,
@@ -525,7 +791,7 @@ contract OffchainPayment {
         address indexed user,
         address indexed confirmer,
         uint256 amount,
-        uint256 lastCommitBlock        
+        uint256 lastCommitBlock
     );
 
     event ProviderProposeWithdraw (
@@ -538,7 +804,7 @@ contract OffchainPayment {
         bytes32 indexed id,
         address indexed token,
         int256 balance,
-        uint256 lastCommitBlock       
+        uint256 lastCommitBlock
     );
 
     event ProposeRebalance (

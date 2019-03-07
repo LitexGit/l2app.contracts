@@ -225,7 +225,7 @@ contract MultiSigWallet {
                 if (txn.ethBlockNumber > ethBlockNumber){
                    ethBlockNumber = txn.ethBlockNumber;
                 }
-                
+
                 proposedTxMap[txn.txHash] = true;
 
                 emit Execution(transactionId);

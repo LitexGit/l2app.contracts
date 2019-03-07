@@ -322,7 +322,7 @@ contract OffchainPayment {
                 onchainPayment,
                 channelID,
                 amount,
-                lastCommitBlock       
+                lastCommitBlock
             )
         );
         UserWithdrawProof storage userWithdrawProof = userWithdrawProofMap[id];
@@ -360,12 +360,12 @@ contract OffchainPayment {
         );
         address signer = ECDSA.recover(messageHash, signature);
         if (signer == provider) {
-            userWithdrawProof.providerSignature = signature; 
+            userWithdrawProof.providerSignature = signature;
             if (userWithdrawProof.regulatorSignature != 0) {
                 userWithdrawProof.isConfirmed = true;
             }
         } else if (signer == regulator) {
-            userWithdrawProof.regulatorSignature = signature; 
+            userWithdrawProof.regulatorSignature = signature;
             if (userWithdrawProof.providerSignature != 0) {
                 userWithdrawProof.isConfirmed = true;
             }
@@ -519,15 +519,20 @@ contract OffchainPayment {
         public
     {
         // find puppet
-        Puppet[] puppetList = puppets[user];
+        Puppet[] storage puppetList = puppets[user];
 
-        // if exist, change enabled to true
-        /* puppet.enabled = true; */
+        uint256 i = 0;
+        while (i < puppetList.length) {
+            if (puppetList[i].p == puppet){
+                puppetList[i].enabled = true;
+                break;
+            }
+            i += 1;
+        }
 
-        // if not exist add one
-
-        puppetList.push(Puppet(puppet, true));
-
+        if (i == puppetList.length) {
+            puppetList.push(Puppet(puppet, true));
+        }
 
     }
 
@@ -538,11 +543,16 @@ contract OffchainPayment {
         isOperator(msg.sender)
         public
     {
-        // find puppets
-        Puppet[] puppetList = puppets[user];
+        Puppet[] storage puppetList = puppets[user];
 
-        // disable it
-        /* puppet.enabled = false; */
+        uint256 i = 0;
+        while (i < puppetList.length) {
+            if (puppetList[i].p == puppet){
+                puppetList[i].enabled = false;
+                break;
+            }
+            i += 1;
+        }
 
     }
 
@@ -604,14 +614,11 @@ contract OffchainPayment {
         require(channel.status == 1, "channel should be open");
         require(channel.userWithdraw <= withdraw, "new withdraw should greater than old withdraw");
 
-        // set channel user withdrawAmount
-        channel.userWithdraw = withdraw;
-        // calculate deltaWithdrawAmount, add it to PaymentNetwork.userTotalWithdraw
 
         // destroy locked assets
         bytes32 lockId = keccak256(abi.encodePacked(
+                onchainPayment,
                 channelID,
-                amount,
                 withdraw,
                 lastCommitBlock
             ));
@@ -619,8 +626,16 @@ contract OffchainPayment {
         if (lockedAssetMap[lockId].locked == true){
             delete lockedAssetMap[lockId];
         } else {
+
+            // calculate deltaWithdrawAmount, add it to PaymentNetwork.userTotalWithdraw
+            uint256 deltaAmount = withdraw - channel.userWithdraw;
+            // set channel user withdrawAmount
+            channel.userWithdraw = withdraw;
             PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
             paymentNetwork.userTotalWithdraw = paymentNetwork.userTotalWithdraw + amount;
+
+            channel.userBalance -= deltaAmount;
+
       }
 
     }
@@ -628,6 +643,7 @@ contract OffchainPayment {
     function onchainProviderWithdraw (
         address token,
         uint256 amount,
+        uint256 balance,
         uint256 lastCommitBlock
     )
         isOperator(msg.sender)
@@ -639,8 +655,9 @@ contract OffchainPayment {
 
         // destroy locked assets
         bytes32 lockId = keccak256(abi.encodePacked(
+                onchainPayment,
                 token,
-                amount,
+                balance,
                 lastCommitBlock
             ));
 
@@ -666,14 +683,33 @@ contract OffchainPayment {
         require(channel.status == 1, "channel should be open");
 
         channel.status = 3;
-        /* channel.closingData.closer = user; */
-
-        PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
 
 
+        // destroy locked assets
+        bytes32 lockId = keccak256(abi.encodePacked(
+                onchainPayment,
+                channelID,
+                user,
+                balance,
+                lastCommitBlock
+            ));
 
-        //TODO: unlockAsset
+        if (lockedAssetMap[lockId].locked == true){
+            delete lockedAssetMap[lockId];
+        } else {
 
+            PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
+            paymentNetwork.userTotalDeposit -= channel.userDeposit;
+            paymentNetwork.userTotalWithdraw -= channel.userWithdraw;
+
+            RebalanceProof memory rebalanceProof = rebalanceProofMap[channelID];
+            uint256 channelTotalAmount = channel.userDeposit + rebalanceProof.amount - channel.userWithdraw;
+            uint256 providerSettleAmount = channelTotalAmount - balance;
+
+            paymentNetwork.providerTotalSettled += providerSettleAmount;
+            paymentNetwork.providerBalance += providerSettleAmount;
+
+        }
     }
 
     function onchainCloseChannel (
@@ -693,17 +729,19 @@ contract OffchainPayment {
       // set status to close
       channel.status = 2;
 
-      /* channel.closingData.closer = closer;
+      ClosingChannel storage closingData = closingChannelMap[channelID];
+
+      closingData.closer = closer;
       if (closer == channel.user ) {
-        channel.closingData.providerTransferredAmount = balance;
-        channel.closingData.providerTransferredNonce = nonce;
+        closingData.providerTransferredAmount = balance;
+        closingData.providerTransferredNonce = nonce;
 
       } else {
-        channel.closingData.userTransferredAmount = balance;
-        channel.closingData.userTransferredNonce = nonce;
+        closingData.userTransferredAmount = balance;
+        closingData.userTransferredNonce = nonce;
 
       }
-      channel.closingData.providerRebalanceInAmount = inAmount; */
+      closingData.providerRebalanceInAmount = inAmount;
 
     }
 
@@ -721,10 +759,11 @@ contract OffchainPayment {
       Channel storage channel = channelMap[channelID];
       require(channel.status == 2, "channel should be close");
 
-      /* channel.closingData.providerTransferredAmount = providerBalance;
-      channel.closingData.providerTransferredNonce = providerNonce;
-      channel.closingData.userTransferredAmount = userBalance;
-      channel.closingData.userTransferredNonce = userNonce; */
+      ClosingChannel storage closingData = closingChannelMap[channelID];
+      closingData.providerTransferredAmount = providerBalance;
+      closingData.providerTransferredNonce = providerNonce;
+      closingData.userTransferredAmount = userBalance;
+      closingData.userTransferredNonce = userNonce;
 
     }
 
@@ -739,7 +778,8 @@ contract OffchainPayment {
       Channel storage channel = channelMap[channelID];
       require(channel.status == 2, "channel should be close");
       // set status
-      /* channel.closingData.providerRebalanceInAmount = inAmount; */
+      ClosingChannel storage closingData = closingChannelMap[channelID];
+      closingData.providerRebalanceInAmount = inAmount;
 
     }
 
@@ -757,9 +797,17 @@ contract OffchainPayment {
       // set status, settled
       channel.status = 3;
 
-      // TODO: change channel data && paymentNetwork data
+      // change channel data && paymentNetwork data
       // check userSettleAmount & providerSettleAmount
       // set paymentNetwork.userCount/userTotalDeposit/userTotalWithdraw/providerBalance/providerRebalanceIn
+
+      PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
+
+      paymentNetwork.userCount -= 1;
+      paymentNetwork.userTotalDeposit -= channel.userDeposit;
+      paymentNetwork.userTotalWithdraw -= channel.userWithdraw;
+      paymentNetwork.providerTotalSettled += providerSettleAmount;
+      paymentNetwork.providerBalance += providerSettleAmount;
 
     }
 

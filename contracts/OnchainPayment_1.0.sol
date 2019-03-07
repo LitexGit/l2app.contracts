@@ -219,30 +219,14 @@ contract OnchainPayment {
     }
 
     function disablePuppet (
-        address puppet,
-        uint256 lastCommitBlock,
-        bytes memory providerSignature,
-        bytes memory regulatorSignature
+        address puppet
     )
         public
-        commitBlockValid (lastCommitBlock)
     {
-       bytes32 messageHash = keccak256(
-            abi.encodePacked(
-                address(this),
-                msg.sender,
-                puppet,
-                lastCommitBlock
-            )
-        );
-        require(ECDSA.recover(messageHash, providerSignature) == provider, "invalid provider signature");
-        require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invalid regulator signature");
-
         puppetMap[msg.sender][puppet] = 2;
         emit PuppetDisabled (
             msg.sender,
-            puppet,
-            lastCommitBlock
+            puppet
         );
     }
 
@@ -694,8 +678,7 @@ contract OnchainPayment {
 
     event PuppetDisabled (
         address indexed user,
-        address puppet,
-        uint256 lastCommitBlock
+        address puppet
     );
 
     event UserNewDeposit (

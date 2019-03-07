@@ -27,24 +27,25 @@ contract OffchainPayment {
         uint256 providerBalance;
     }
 
-    // channelID => channel
+    // channelID => Channel
     mapping (bytes32 => Channel) public channelMap;
+    // channelID => ClosingChannel
+    mapping (bytes32 => ClosingChannel) public closingChannelMap;
+    // channelID => participant => balanceProof
+    mapping (bytes32 => mapping(address => BalanceProof)) balanceProofMap;
+    // channelID => RebalanceProof
+    mapping (bytes32 => RebalanceProof) public rebalanceProofMap;
     struct Channel {
         address user;
         address token; 
         uint256 userDeposit;
         uint256 userWithdraw;
-        // participant => balanceProof
-        mapping (address => BalanceProof) balanceProofMap;
         // user offchain balance
         uint256 userBalance;
         // provider offchain balance
         uint256 providerBalance;
-        // orientation => rebalanceProof, in=true, out=false
-        mapping (bool => RebalanceProof) rebalanceProofMap;
         // 0=not exist, 1=open, 2=closing, 3=settled
         uint256 status;
-        ClosingChannel closingData;
     }
     // record data committed onchain when closing channel
     struct ClosingChannel {
@@ -75,16 +76,17 @@ contract OffchainPayment {
         bool enabled;
     }
 
-    // id => disable puppet proof
-    mapping (bytes32 => DisablePuppetProof) public disablePuppetProofMap;
-    struct DisablePuppetProof {
-        address user;
-        address puppet;
-        uint256 lastCommitBlock;
-        bytes providerSignature;
-        bytes regulatorSignature;
-    }
+    // // id => disable puppet proof
+    // mapping (bytes32 => DisablePuppetProof) public disablePuppetProofMap;
+    // struct DisablePuppetProof {
+    //     address user;
+    //     address puppet;
+    //     uint256 lastCommitBlock;
+    //     bytes providerSignature;
+    //     bytes regulatorSignature;
+    // }
 
+    
     // id => user withdraw proof
     mapping (bytes32 => UserWithdrawProof) public userWithdrawProofMap;
     struct UserWithdrawProof {
@@ -108,16 +110,16 @@ contract OffchainPayment {
     }
 
     // id => rebalance proof
-    mapping (bytes32 => RebalanceProof) public rebalanceProofMap;
+    mapping (bytes32 => RebalanceProof) public proposeRebalanceProofMap;
     struct RebalanceProof {
         // in=true, out=false
-        bool orientation;
+        // bool orientation;
         bytes32 channelID;
         // total amount of rebalance inOrOut
         uint256 amount;
         uint256 nonce;
         bytes providerSignature;
-        bytes partnerSignature;
+        bytes regulatorSignature;
     }
 
     // token => feeProof
@@ -171,20 +173,20 @@ contract OffchainPayment {
         );
         address recoveredSignature = ECDSA.recover(messageHash, signature);
         if (msg.sender == provider) {
-            BalanceProof storage userBalanceProof = channel.balanceProofMap[to];
+            BalanceProof storage userBalanceProof = balanceProofMap[channelID][to];
             require(userBalanceProof.balance < balance);
             require(userBalanceProof.nonce < nonce);
             require(balance - userBalanceProof.balance <= channel.providerBalance);
             require(recoveredSignature == provider);
 
-            channel.providerBalance -= balance - channel.balanceProofMap[to].balance;
-            channel.userBalance += balance - channel.balanceProofMap[to].balance;
+            channel.providerBalance -= balance - userBalanceProof.balance;
+            channel.userBalance += balance - userBalanceProof.balance;
             userBalanceProof.balance = balance;
             userBalanceProof.nonce = nonce;
             userBalanceProof.additionalHash = additionalHash;
             userBalanceProof.signature = signature;
         } else {
-            BalanceProof storage balanceProof = channel.balanceProofMap[provider];
+            BalanceProof storage balanceProof = balanceProofMap[channelID][provider];
             require(balanceProof.balance < balance);
             require(balanceProof.nonce < nonce);
             require(balance - balanceProof.balance <= channel.userBalance);
@@ -220,7 +222,7 @@ contract OffchainPayment {
         Channel storage channel = channelMap[channelID];
         require(msg.sender == channel.user);
         require(channel.status == 1);
-        BalanceProof storage balanceProof = channel.balanceProofMap[channel.user];
+        BalanceProof storage balanceProof = balanceProofMap[channelID][channel.user];
         require(balanceProof.balance == balance);
         require(balanceProof.nonce == nonce);
         balanceProof.consignorSignature = consignorSignature;
@@ -232,21 +234,53 @@ contract OffchainPayment {
         );
     }
 
-    function proposeDisablePuppet (
-        address puppet,
-        uint256 lastCommitBlock
-    )
-        public
-    {}
-
-    // @param id generated after proposeDisablePuppet
-    function confirmDisablePuppet (
-        bytes32 id,
-        address confirmer,
+    function submitFee (
+        address token,
+        uint256 amount,
+        uint256 nonce,
         bytes memory signature
     )
         public
-    {}
+    {
+        FeeProof storage feeProof = feeProofMap[token];
+        require(amount > feeProof.amount);
+        require(nonce > feeProof.nonce);
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                onchainPayment,
+                token,
+                amount,
+                nonce   
+            )
+        );
+        require(ECDSA.recover(messageHash, signature) == provider);
+        feeProof.amount = amount;
+        feeProof.nonce = nonce;
+        feeProof.signature = signature;
+        emit SubmitFee (
+            token,
+            amount,
+            nonce
+        );
+    }
+
+    // function proposeDisablePuppet (
+    //     address puppet,
+    //     uint256 lastCommitBlock
+    // )
+    //     public
+    // {
+
+    // }
+
+    // // @param id generated after proposeDisablePuppet
+    // function confirmDisablePuppet (
+    //     bytes32 id,
+    //     address confirmer,
+    //     bytes memory signature
+    // )
+    //     public
+    // {}
 
     function userProposeWithdraw (
         bytes32 channelID,
@@ -254,7 +288,9 @@ contract OffchainPayment {
         uint256 lastCommitBlock
     )
         public
-    {}
+    {
+
+    }
 
     // @param id generated after userProposeWithdraw
     function confirmUserWithdraw (
@@ -283,33 +319,69 @@ contract OffchainPayment {
     {} 
 
     // @param amount total withdraw amount
-    function rebalance (
+    function proposeRebalance (
         bytes32 channelID,
-        uint256 amout,
-        uint256 nonce,
-        bool inOrOut,
-        bytes memory signature
-    )
-        public
-    {}
-
-    // @param id generated after rebalance
-    function confirmRebalance (
-        bytes32 id,
-        address confirmer,
-        bytes memory signature
-    )
-        public
-    {}
-
-    function submitFee (
-        address token,
         uint256 amount,
         uint256 nonce,
         bytes memory signature
     )
         public
-    {}
+    {
+        RebalanceProof storage rebalanceProof = rebalanceProofMap[channelID];
+        require(rebalanceProof.amount < amount);
+        require(rebalanceProof.nonce < nonce);
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                onchainPayment,
+                channelID,
+                amount,
+                nonce
+            )
+        );
+        require(ECDSA.recover(messageHash, signature) == provider);
+        RebalanceProof storage proposeRebalanceProof = proposeRebalanceProofMap[messageHash];
+        proposeRebalanceProof.channelID = channelID;
+        proposeRebalanceProof.amount = amount;
+        proposeRebalanceProof.nonce = nonce;
+        proposeRebalanceProof.providerSignature = signature;
+        emit ProposeRebalance (
+            channelID,
+            amount,
+            nonce,
+            messageHash
+        );
+    }
+
+    // @param id generated after rebalance
+    function confirmRebalance (
+        bytes32 id,
+        bytes memory signature
+    )
+        public
+    {
+        RebalanceProof storage proposeRebalanceProof = proposeRebalanceProofMap[id];
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                onchainPayment,
+                proposeRebalanceProof.channelID,
+                proposeRebalanceProof.amount,
+                proposeRebalanceProof.nonce
+            )
+        );
+        require(ECDSA.recover(messageHash, signature) == regulator);
+        RebalanceProof storage rebalanceProof = rebalanceProofMap[proposeRebalanceProof.channelID];
+        rebalanceProof.channelID = proposeRebalanceProof.channelID;
+        rebalanceProof.amount = proposeRebalanceProof.amount;
+        rebalanceProof.nonce = proposeRebalanceProof.nonce;
+        rebalanceProof.providerSignature = proposeRebalanceProof.providerSignature;
+        rebalanceProof.regulatorSignature = signature;
+        emit ConfirmRebalance (
+            rebalanceProof.channelID,
+            id,
+            rebalanceProof.amount,
+            rebalanceProof.nonce
+        );
+    }
 
     // function substituteRebalanceProof (
     //     bytes32 id,
@@ -419,20 +491,26 @@ contract OffchainPayment {
         uint256 nonce
     );
 
-    event ProposeDisablePuppet (
-        address indexed user,
-        address puppet,
-        uint256 lastCommitBlock,
-        bytes32 id // generated after proposeDisablePuppet
+    event SubmitFee (
+        address token,
+        uint256 amount,
+        uint256 nonce
     );
 
-    event ConfirmdisablePuppet (
-        bytes32 indexed id,
-        address indexed user,
-        address indexed confirmer,
-        address puppet,
-        uint256 lastCommitBlock
-    );
+    // event ProposeDisablePuppet (
+    //     address indexed user,
+    //     address puppet,
+    //     uint256 lastCommitBlock,
+    //     bytes32 id // generated after proposeDisablePuppet
+    // );
+
+    // event ConfirmdisablePuppet (
+    //     bytes32 indexed id,
+    //     address indexed user,
+    //     address indexed confirmer,
+    //     address puppet,
+    //     uint256 lastCommitBlock
+    // );
 
     event UserProposeWithdraw (
         address indexed user,
@@ -463,18 +541,17 @@ contract OffchainPayment {
         uint256 lastCommitBlock       
     );
 
-    event Rebalance (
-        bytes32 channelID,
+    event ProposeRebalance (
+        bytes32 indexed channelID,
         uint256 amout,
         uint256 nonce,
-        bool inOrOut,
         bytes32 id
     );
 
     event ConfirmRebalance (
+        bytes32 indexed channelID,
         bytes32 indexed id,
         uint256 amout,
-        uint256 nonce,
-        bool inOrOut        
+        uint256 nonce
     );
 }

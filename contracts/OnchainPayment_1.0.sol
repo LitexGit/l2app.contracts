@@ -397,6 +397,8 @@ contract OnchainPayment {
             ERC20(token).safeTransfer(regulator, withdrawAmount);
         }
 
+        providerBalance[token] -= int256(withdrawAmount);
+
         emit RegulatorWithdraw (
             token,
             withdrawAmount,

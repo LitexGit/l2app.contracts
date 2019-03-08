@@ -37,7 +37,7 @@ contract OffchainPayment {
     // channelID => ClosingChannel
     mapping (bytes32 => ClosingChannel) public closingChannelMap;
     // channelID => participant => balanceProof
-    mapping (bytes32 => mapping(address => BalanceProof)) balanceProofMap;
+    mapping (bytes32 => mapping(address => BalanceProof)) public balanceProofMap;
     // channelID => RebalanceProof
     mapping (bytes32 => RebalanceProof) public rebalanceProofMap;
     struct Channel {
@@ -92,11 +92,11 @@ contract OffchainPayment {
     // }
 
 
-    // id => user withdraw proof
+    // channelID => user withdraw proof
     mapping (bytes32 => UserWithdrawProof) public userWithdrawProofMap;
     struct UserWithdrawProof {
         bool isConfirmed;
-        bytes32 channelID;
+        // bytes32 channelID;
         // total amount of withdraw
         uint256 amount;
         uint256 lastCommitBlock;
@@ -105,10 +105,10 @@ contract OffchainPayment {
         address receiver;
     }
 
-    // id => provider withdraw proof
-    mapping (bytes32 => ProviderWithdrawProof) public providerWithdrawProofMap;
+    // token => provider withdraw proof
+    mapping (address => ProviderWithdrawProof) public providerWithdrawProofMap;
     struct ProviderWithdrawProof {
-        address token;
+        // address token;
         // balance after withdraw
         int256 balance;
         uint256 lastCommitBlock;
@@ -136,17 +136,17 @@ contract OffchainPayment {
         bytes signature;
     }
 
-    struct LockedAsset {
-        bool locked;
-        //1 = provider's withdraw asset
-        //2 = user's withdraw asset
-        uint8 assetType;
-        uint256 deltaAmount;
-    }
+    // struct LockedAsset {
+    //     bool locked;
+    //     //1 = provider's withdraw asset
+    //     //2 = user's withdraw asset
+    //     uint8 assetType;
+    //     uint256 deltaAmount;
+    // }
 
 
     // id => locked asset
-    mapping (bytes32 => LockedAsset) public lockedAssetMap;
+    // mapping (bytes32 => LockedAsset) public lockedAssetMap;
 
 
     modifier isOperator (address caller) {
@@ -325,30 +325,30 @@ contract OffchainPayment {
                 lastCommitBlock       
             )
         );
-        UserWithdrawProof storage userWithdrawProof = userWithdrawProofMap[id];
-        userWithdrawProof.channelID = channelID;
+        UserWithdrawProof storage userWithdrawProof = userWithdrawProofMap[channelID];
+        require(userWithdrawProof.lastCommitBlock < lastCommitBlock);
+        // userWithdrawProof.channelID = channelID;
         userWithdrawProof.amount = amount + channel.userWithdraw;
         userWithdrawProof.receiver = receiver;
         userWithdrawProof.lastCommitBlock = lastCommitBlock;
+        userWithdrawProof.isConfirmed = false;
         emit UserProposeWithdraw(
             channelID,
             channel.user,
             amount,
             receiver,
-            lastCommitBlock,
-            id
+            lastCommitBlock
         );
     }
 
     // @param id generated after userProposeWithdraw
     function confirmUserWithdraw (
-        bytes32 id,
-        address confirmer,
+        bytes32 channelID,
         bytes memory signature
     )
         public
     {
-        UserWithdrawProof storage userWithdrawProof = userWithdrawProofMap[id];
+        UserWithdrawProof storage userWithdrawProof = userWithdrawProofMap[channelID];
         require(userWithdrawProof.isConfirmed == false);
         bytes32 messageHash = keccak256(
             abi.encodePacked(
@@ -361,24 +361,23 @@ contract OffchainPayment {
         address signer = ECDSA.recover(messageHash, signature);
         if (signer == provider) {
             userWithdrawProof.providerSignature = signature; 
-            if (userWithdrawProof.regulatorSignature != 0) {
+            if (userWithdrawProof.regulatorSignature.length != 0) {
                 userWithdrawProof.isConfirmed = true;
             }
         } else if (signer == regulator) {
             userWithdrawProof.regulatorSignature = signature; 
-            if (userWithdrawProof.providerSignature != 0) {
+            if (userWithdrawProof.providerSignature.length != 0) {
                 userWithdrawProof.isConfirmed = true;
             }
         } else {
             revert();
         }
         if (userWithdrawProof.isConfirmed) {
-            Channel storage channel = channelMap[userWithdrawProof.channelID];
-            lockedAssetMap[id] = LockedAsset(true, 2, channel.userWithdraw);
-            channel.userWithdraw = userWithdrawProof.amount;
+            Channel storage channel = channelMap[channelID];
+            // lockedAssetMap[id] = LockedAsset(true, 2, channel.userWithdraw);
+            channel.userBalance -= userWithdrawProof.amount - channel.userWithdraw;
         }
         emit ConfirmUserWithdraw (
-            id,
             userWithdrawProof.channelID,
             signer,
             userWithdrawProof.amount,
@@ -387,22 +386,47 @@ contract OffchainPayment {
         );
     }
 
-    // @param balance balance after withdraw
     function providerProposeWithdraw (
         address token,
         int256 balance,
         uint256 lastCommitBlock
     )
         public
-    {}
+    {
+        require(msg.sender == provider);
+        ProviderWithdrawProof storage providerWithdrawProof = providerWithdrawProofMap[token];
+        require(lastCommitBlock > providerWithdrawProof.lastCommitBlock);
+        providerWithdrawProof.balance = balance;
+        providerWithdrawProof.lastCommitBlock = lastCommitBlock;
+        emit ProviderProposeWithdraw (
+            token,
+            balance,
+            lastCommitBlock
+        );
+    }
 
-    // @param id generated after providerProposeWithdraw
     function confirmProviderWithdraw (
-        bytes32 id,
+        address token,
         bytes memory signature
     )
         public
-    {}
+    {
+        ProviderWithdrawProof storage providerWithdrawProof = providerWithdrawProofMap[token];
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                onchainPayment,
+                token,
+                providerWithdrawProof.balance,
+                lastCommitBlock
+            )
+        );
+        require(ECDSA.recover(messageHash, signature) == regulator);
+        emit ConfirmProviderWithdraw (
+            token,
+            balance,
+            lastCommitBlock
+        );
+    }
 
     // @param amount total withdraw amount
     function proposeRebalance (
@@ -846,12 +870,10 @@ contract OffchainPayment {
         address indexed user,
         uint256 amount,
         address receiver,
-        uint256 lastCommitBlock,
-        bytes32 id
+        uint256 lastCommitBlock
     );
 
     event ConfirmUserWithdraw (
-        bytes32 indexed id,
         bytes32 indexed channelID,
         address indexed user,
         address confirmer,
@@ -867,7 +889,6 @@ contract OffchainPayment {
     );
 
     event ConfirmProviderWithdraw (
-        bytes32 indexed id,
         address indexed token,
         int256 balance,
         uint256 lastCommitBlock

@@ -405,58 +405,56 @@ contract OnchainPayment {
         );
     }
 
-    // function cooperativeSettle (
-    //     bytes32 channelID,
-    //     uint256 balance,
-    //     uint256 lastCommitBlock,
-    //     bytes memory providerSignature,
-    //     bytes memory regulatorSignature
-    // )
-    //     public
-    //     isChannelOpened(user)
-    //     commitBlockValid(lastCommitBlock)
-    // {
-    //     require(msg.sender == user, "only user can trigger");
+    function cooperativeSettle (
+        bytes32 channelID,
+        uint256 balance,
+        uint256 lastCommitBlock,
+        bytes memory providerSignature,
+        bytes memory regulatorSignature
+    )
+        public
+        isChannelOpened(channelID)
+        commitBlockValid(lastCommitBlock)
+    {
+        Channel storage channel = channels[channelID]; 
+        require(msg.sender == channel.user, "only user can trigger");
 
-    //     bytes32 channelID = getChannelID(user);
-                
-    //     Channel storage channel = channels[channelID];
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                address(this),
+                channelID,
+                balance,
+                lastCommitBlock
+            ) 
+        );
 
-    //     bytes32 messageHash = keccak256(
-    //         abi.encodePacked(
-    //             address(this),
-    //             channelID,
-    //             user,
-    //             balance,
-    //             lastCommitBlock
-    //         ) 
-    //     );
+        require(ECDSA.recover(messageHash, providerSignature) == provider, "invalid provider signature");
+        require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invalid regulator signature");
 
-    //     require(ECDSA.recover(messageHash, providerSignature) == provider, "invalid provider signature");
-    //     require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invalid regulator signature");
+        uint256 payout = safeAdd(balance, channel.withdraw);
+        if (payout >= channel.deposit) {
+            providerBalance[channel.token] -= int256(payout - channel.deposit);
+        } else {
+            providerBalance[channel.token] += int256(channel.deposit - payout);
+        }
 
-    //     uint256 payout = safeAdd(balance, channel.withdraw);
+        delete channels[channelID];
+        delete channelCounter[channel.user][channel.token];
 
-    //     if (payout >= channel.deposit) {
-    //         providerBalance -= int256(payout - channel.deposit);
-    //     } else {
-    //         providerBalance += int256(channel.deposit - payout);
-    //     }
+        if (channel.token == address(0)) {
+            address(channel.user).transfer(balance);
+        } else {
+            ERC20(channel.token).safeTransfer(channel.user, balance);
+        }
 
-    //     delete channels[channelID];
-    //     delete channelCounter[user];
-
-    //     if (balance > 0) {
-    //         address(user).transfer(balance);
-    //     }
-
-    //     emit CooperativeSettled (
-    //         channelID, 
-    //         user, 
-    //         balance,
-    //         lastCommitBlock
-    //     );
-    // }
+        emit CooperativeSettled (
+            channelID, 
+            channel.user,
+            channel.token, 
+            balance,
+            lastCommitBlock
+        );
+    }
 
     function closeChannel (
         bytes32 channelID,
@@ -716,12 +714,13 @@ contract OnchainPayment {
         uint256 feeNonce
     );
 
-    // event CooperativeSettled (
-    //     bytes32 indexed channelID,
-    //     address indexed user, 
-    //     uint256 balance,
-    //     uint256 lastCommitBlock
-    // );
+    event CooperativeSettled (
+        bytes32 indexed channelID,
+        address indexed user, 
+        address token,
+        uint256 balance,
+        uint256 lastCommitBlock
+    );
 
     event ChannelClosed (
         bytes32 indexed channelID,

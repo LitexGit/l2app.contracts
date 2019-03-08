@@ -353,19 +353,19 @@ contract OffchainPayment {
         bytes32 messageHash = keccak256(
             abi.encodePacked(
                 onchainPayment,
-                userWithdrawProof.channelID,
+                channelID,
                 userWithdrawProof.amount,
                 userWithdrawProof.lastCommitBlock
             )
         );
         address signer = ECDSA.recover(messageHash, signature);
         if (signer == provider) {
-            userWithdrawProof.providerSignature = signature; 
+            userWithdrawProof.providerSignature = signature;
             if (userWithdrawProof.regulatorSignature.length != 0) {
                 userWithdrawProof.isConfirmed = true;
             }
         } else if (signer == regulator) {
-            userWithdrawProof.regulatorSignature = signature; 
+            userWithdrawProof.regulatorSignature = signature;
             if (userWithdrawProof.providerSignature.length != 0) {
                 userWithdrawProof.isConfirmed = true;
             }
@@ -378,7 +378,8 @@ contract OffchainPayment {
             channel.userBalance -= userWithdrawProof.amount - channel.userWithdraw;
         }
         emit ConfirmUserWithdraw (
-            userWithdrawProof.channelID,
+            channelID,
+            channel.user,
             signer,
             userWithdrawProof.amount,
             userWithdrawProof.lastCommitBlock,
@@ -417,14 +418,14 @@ contract OffchainPayment {
                 onchainPayment,
                 token,
                 providerWithdrawProof.balance,
-                lastCommitBlock
+                providerWithdrawProof.lastCommitBlock
             )
         );
         require(ECDSA.recover(messageHash, signature) == regulator);
         emit ConfirmProviderWithdraw (
             token,
-            balance,
-            lastCommitBlock
+            providerWithdrawProof.balance,
+            providerWithdrawProof.lastCommitBlock
         );
     }
 
@@ -647,9 +648,9 @@ contract OffchainPayment {
                 lastCommitBlock
             ));
 
-        if (lockedAssetMap[lockId].locked == true){
+        /* if (lockedAssetMap[lockId].locked == true){
             delete lockedAssetMap[lockId];
-        } else {
+        } else { */
 
             // calculate deltaWithdrawAmount, add it to PaymentNetwork.userTotalWithdraw
             uint256 deltaAmount = withdraw - channel.userWithdraw;
@@ -660,7 +661,7 @@ contract OffchainPayment {
 
             channel.userBalance -= deltaAmount;
 
-      }
+      /* } */
 
     }
 
@@ -685,13 +686,13 @@ contract OffchainPayment {
                 lastCommitBlock
             ));
 
-        if (lockedAssetMap[lockId].locked == true){
+        /* if (lockedAssetMap[lockId].locked == true){
             delete lockedAssetMap[lockId];
-        } else {
+        } else { */
             PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
             paymentNetwork.providerWithdraw = paymentNetwork.providerWithdraw + amount;
             paymentNetwork.providerBalance = paymentNetwork.providerBalance - amount;
-        }
+        /* } */
 
     }
 
@@ -708,7 +709,6 @@ contract OffchainPayment {
 
         channel.status = 3;
 
-
         // destroy locked assets
         bytes32 lockId = keccak256(abi.encodePacked(
                 onchainPayment,
@@ -718,9 +718,9 @@ contract OffchainPayment {
                 lastCommitBlock
             ));
 
-        if (lockedAssetMap[lockId].locked == true){
+        /* if (lockedAssetMap[lockId].locked == true){
             delete lockedAssetMap[lockId];
-        } else {
+        } else { */
 
             PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
             paymentNetwork.userTotalDeposit -= channel.userDeposit;
@@ -733,7 +733,7 @@ contract OffchainPayment {
             paymentNetwork.providerTotalSettled += providerSettleAmount;
             paymentNetwork.providerBalance += providerSettleAmount;
 
-        }
+        /* } */
     }
 
     function onchainCloseChannel (
@@ -861,10 +861,9 @@ contract OffchainPayment {
         uint256 i = 0;
         while (i < lockIds.length) {
             //TODO: find lockId, check currentBlockNumber > lastCommitBlock
-            delete lockedAssetMap[lockIds[i]];
+            /* delete lockedAssetMap[lockIds[i]]; */
             i += 1;
         }
-
     }
 
     /**

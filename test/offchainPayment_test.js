@@ -40,6 +40,7 @@ contract('OffchainPayment', (accounts) => {
     let puppetData = await this.offchainPayment.puppets.call(userAddress, 0);
     console.log("puppetData", puppetData);
 
+
   });
 
   it("should onchainOpenChannel successfully", async ()=>{
@@ -60,6 +61,9 @@ contract('OffchainPayment', (accounts) => {
     console.log("pyamentNetworkMap data", pnData);
     let channelData = await this.offchainPayment.channelMap.call(channelID);
     console.log("channelMap data", channelData);
+
+    let balanceProofData = await this.offchainPayment.contract.methods.balanceProofMap(channelID, userAddress).call({from: userAddress});
+    console.log("balanceProofData", balanceProofData);
 
     assert.equal(channelData.user, userAddress, "address should be equal");
     assert.equal(channelData.userDeposit, amount, "amount should be equal");

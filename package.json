@@ -1,0 +1,25 @@
+{
+  "name": "src",
+  "version": "1.0.0",
+  "description": "",
+  "main": "cita_deploy.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "@cryptape/cita-sdk": "^0.21.2",
+    "ethereumjs-tx": "^1.3.7",
+    "truffle-privatekey-provider": "^1.1.0",
+    "web3": "^1.0.0-beta.48"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@gitlab.f3m.club:l2/l2-contract.git"
+  },
+  "author": "",
+  "license": "ISC"
+}

@@ -641,27 +641,11 @@ contract OffchainPayment {
 
 
         // destroy locked assets
-        bytes32 lockId = keccak256(abi.encodePacked(
-                onchainPayment,
-                channelID,
-                withdraw,
-                lastCommitBlock
-            ));
+        delete userWithdrawProofMap[channelID];
 
-        /* if (lockedAssetMap[lockId].locked == true){
-            delete lockedAssetMap[lockId];
-        } else { */
+        PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
+        paymentNetwork.userTotalWithdraw = paymentNetwork.userTotalWithdraw + amount;
 
-            // calculate deltaWithdrawAmount, add it to PaymentNetwork.userTotalWithdraw
-            uint256 deltaAmount = withdraw - channel.userWithdraw;
-            // set channel user withdrawAmount
-            channel.userWithdraw = withdraw;
-            PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
-            paymentNetwork.userTotalWithdraw = paymentNetwork.userTotalWithdraw + amount;
-
-            channel.userBalance -= deltaAmount;
-
-      /* } */
 
     }
 
@@ -674,26 +658,11 @@ contract OffchainPayment {
         isOperator(msg.sender)
         public
     {
-        /* require(token.isContract() == true, "invalid token address"); */
-        // find payment PaymentNetwork
-        // set providerWithdraw
+        delete providerWithdrawProofMap[token];
 
-        // destroy locked assets
-        bytes32 lockId = keccak256(abi.encodePacked(
-                onchainPayment,
-                token,
-                balance,
-                lastCommitBlock
-            ));
-
-        /* if (lockedAssetMap[lockId].locked == true){
-            delete lockedAssetMap[lockId];
-        } else { */
-            PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
-            paymentNetwork.providerWithdraw = paymentNetwork.providerWithdraw + amount;
-            paymentNetwork.providerBalance = paymentNetwork.providerBalance - amount;
-        /* } */
-
+        /* PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
+        paymentNetwork.providerWithdraw = paymentNetwork.providerWithdraw + amount;
+        paymentNetwork.providerBalance = paymentNetwork.providerBalance - amount; */
     }
 
     function onchainCooperativeSettleChannel(
@@ -705,35 +674,21 @@ contract OffchainPayment {
     isOperator(msg.sender)
     public {
         Channel storage channel = channelMap[channelID];
-        require(channel.status == 1, "channel should be open");
+        require(channel.status == 4, "channel should be waiting for co-close");
 
         channel.status = 3;
 
-        // destroy locked assets
-        bytes32 lockId = keccak256(abi.encodePacked(
-                onchainPayment,
-                channelID,
-                user,
-                balance,
-                lastCommitBlock
-            ));
+        PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
+        paymentNetwork.userTotalDeposit -= channel.userDeposit;
+        paymentNetwork.userTotalWithdraw -= channel.userWithdraw;
 
-        /* if (lockedAssetMap[lockId].locked == true){
-            delete lockedAssetMap[lockId];
-        } else { */
+        RebalanceProof memory rebalanceProof = rebalanceProofMap[channelID];
+        uint256 channelTotalAmount = channel.userDeposit + rebalanceProof.amount - channel.userWithdraw;
+        uint256 providerSettleAmount = channelTotalAmount - balance;
 
-            PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
-            paymentNetwork.userTotalDeposit -= channel.userDeposit;
-            paymentNetwork.userTotalWithdraw -= channel.userWithdraw;
+        paymentNetwork.providerTotalSettled += providerSettleAmount;
+        paymentNetwork.providerBalance += providerSettleAmount;
 
-            RebalanceProof memory rebalanceProof = rebalanceProofMap[channelID];
-            uint256 channelTotalAmount = channel.userDeposit + rebalanceProof.amount - channel.userWithdraw;
-            uint256 providerSettleAmount = channelTotalAmount - balance;
-
-            paymentNetwork.providerTotalSettled += providerSettleAmount;
-            paymentNetwork.providerBalance += providerSettleAmount;
-
-        /* } */
     }
 
     function onchainCloseChannel (
@@ -853,17 +808,43 @@ contract OffchainPayment {
 
     }
 
-    function unlockAsset(
-      bytes32[] lockIds
+    function unlockUserWithdrawProof(
+      bytes32 channelID
     )
     public {
-        // how to get currentBlockNumber ? Operator sync blockNumber?
-        uint256 i = 0;
-        while (i < lockIds.length) {
-            //TODO: find lockId, check currentBlockNumber > lastCommitBlock
-            /* delete lockedAssetMap[lockIds[i]]; */
-            i += 1;
+        uint256 memory ethBlockNumber =  1;
+        UserWithdrawProof storage userWithdrawProof = userWithdrawProofMap[channelID];
+        Channel storage channel = channelMap[channelID];
+
+        if(userWithdrawProof.lastCommitBlock > 0 && userWithdrawProof.lastCommitBlock < ethBlockNumber) {
+
+            channel.userBalance += userWithdrawProof.amount - channel.userWithdraw;
+            delete userWithdrawProofMap[channelID];
+
+        }else{
+          revert();
         }
+
+    }
+
+    function unlockProviderWithdrawProof(
+      address token
+    )
+    public {
+
+        uint256 memory ethBlockNumber =  1;
+        ProviderWithdrawProof storage providerWithdrawProof = providerWithdrawProofMap[token];
+        PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
+
+        if(providerWithdrawProof.lastCommitBlock > 0 && providerWithdrawProof.lastCommitBlock < ethBlockNumber ){
+            paymentNetwork.providerBalance += providerWithdrawProof.balance - paymentNetwork.providerDeposit;
+            delete providerWithdrawProofMap[channelID];
+        } else {
+            revert();
+        }
+
+
+
     }
 
     /**

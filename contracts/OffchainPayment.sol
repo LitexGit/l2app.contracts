@@ -9,10 +9,9 @@ contract OffchainPayment {
      */
     using Address for address;
 
-    address public operator;
-
     // payment contract address on ethereum
     address public onchainPayment;
+    address public operator;
     address public provider;
     address public regulator;
 
@@ -113,6 +112,16 @@ contract OffchainPayment {
         int256 balance;
         uint256 lastCommitBlock;
         bytes signature;
+    }
+
+    // channelID => cooperative settle proof
+    mapping (bytes32 => CooperativeSettleProof) public cooperativeSettleProofMap;
+    struct CooperativeSettleProof {
+        bool isConfirmed;
+        uint256 balance;
+        uint256 lastCommitBlock;
+        bytes providerSignature;
+        bytes regulatorSignature;
     }
 
     // id => rebalance proof
@@ -317,6 +326,7 @@ contract OffchainPayment {
     {
         Channel storage channel = channelMap[channelID];
         require(msg.sender == channel.user);
+        require(cooperativeSettleProofMap[channelID].isConfirmed == false);
         bytes32 id = keccak256(
             abi.encodePacked(
                 onchainPayment,
@@ -332,6 +342,8 @@ contract OffchainPayment {
         userWithdrawProof.receiver = receiver;
         userWithdrawProof.lastCommitBlock = lastCommitBlock;
         userWithdrawProof.isConfirmed = false;
+        userWithdrawProof.providerSignature = bytes(0);
+        userWithdrawProof.regulatorSignature = bytes(0);
         emit UserProposeWithdraw(
             channelID,
             channel.user,
@@ -417,14 +429,76 @@ contract OffchainPayment {
                 onchainPayment,
                 token,
                 providerWithdrawProof.balance,
-                lastCommitBlock
+                providerWithdrawProof.lastCommitBlock
             )
         );
         require(ECDSA.recover(messageHash, signature) == regulator);
         emit ConfirmProviderWithdraw (
             token,
+            providerWithdrawProof.balance,
+            providerWithdrawProof.lastCommitBlock
+        );
+    }
+
+    function proposeCooperativeSettle (
+        bytes32 channelID,
+        uint256 balance,
+        uint256 lastCommitBlock
+    )
+        public
+    {
+        Channel storage channel = channelMap[channelID];
+        require(msg.sender == channel.user);
+        require(userWithdrawProofMap[channelID].isConfirmed == false);
+        CooperativeSettleProof storage csProof = cooperativeSettleProofMap[channelID];
+        require(csProof.isConfirmed == false);
+        require(lastCommitBlock > csProof.lastCommitBlock);
+        csProof = CooperativeSettleProof(false, balance, lastCommitBlock, bytes(0), bytes(0));
+        emit ProposeCooperativeSettle (
+            channel.user,
+            channelID,
             balance,
             lastCommitBlock
+        );
+    }
+
+    function confirmCooperativeSettle (
+        bytes32 channelID,
+        bytes memory signature
+    )
+        public
+    {
+        CooperativeSettleProof storage csProof = cooperativeSettleProofMap[channelID];
+        require(csProof.isConfirmed == false);
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                onchainPayment,
+                channelID,
+                csProof.balance,
+                csProof.lastCommitBlock
+            )
+        );
+        address signer = ECDSA.recover(messageHash, signature);
+        if (signer == provider) {
+            csProof.providerSignature = signature;
+            if (csProof.regulatorSignature.length != 0) {
+                csProof.isConfirmed = true;
+            }
+        } else if (signer == regulator) {
+            csProof.regulatorSignature = signature;
+            if (csProof.providerSignature.length != 0) {
+                csProof.isConfirmed = true;
+            }
+        } else {
+            revert();
+        }
+        emit ConfirmCooperativeSettle (
+            channelID,
+            channelMap[channelID].user,
+            signer,
+            csProof.balance,
+            csProof.lastCommitBlock,
+            csProof.isConfirmed
         );
     }
 
@@ -940,6 +1014,22 @@ contract OffchainPayment {
         address indexed token,
         int256 balance,
         uint256 lastCommitBlock
+    );
+
+    event ProposeCooperativeSettle (
+        address indexed user,
+        bytes32 indexed channelID,
+        uint256 balance,
+        uint256 lastCommitBlock
+    );
+
+    event ConfirmCooperativeSettle (
+        bytes32 indexed channelID,
+        address indexed user,
+        address confirmer,
+        uint256 balance,
+        uint256 lastCommitBlock,
+        bool isAllConfirmed       
     );
 
     event ProposeRebalance (

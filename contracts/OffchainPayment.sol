@@ -900,7 +900,7 @@ contract OffchainPayment {
       bytes32 channelID
     )
     public {
-        uint256 memory ethBlockNumber =  1;
+        uint256 ethBlockNumber =  1;
         UserWithdrawProof storage userWithdrawProof = userWithdrawProofMap[channelID];
         Channel storage channel = channelMap[channelID];
 
@@ -920,13 +920,13 @@ contract OffchainPayment {
     )
     public {
 
-        uint256 memory ethBlockNumber =  1;
+        uint256 ethBlockNumber =  1;
         ProviderWithdrawProof storage providerWithdrawProof = providerWithdrawProofMap[token];
         PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
 
         if(providerWithdrawProof.lastCommitBlock > 0 && providerWithdrawProof.lastCommitBlock < ethBlockNumber ){
             paymentNetwork.providerBalance += providerWithdrawProof.balance - paymentNetwork.providerDeposit;
-            delete providerWithdrawProofMap[channelID];
+            delete providerWithdrawProofMap[token];
         } else {
             revert();
         }

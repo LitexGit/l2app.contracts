@@ -365,19 +365,19 @@ contract OffchainPayment {
         bytes32 messageHash = keccak256(
             abi.encodePacked(
                 onchainPayment,
-                userWithdrawProof.channelID,
+                channelID,
                 userWithdrawProof.amount,
                 userWithdrawProof.lastCommitBlock
             )
         );
         address signer = ECDSA.recover(messageHash, signature);
         if (signer == provider) {
-            userWithdrawProof.providerSignature = signature; 
+            userWithdrawProof.providerSignature = signature;
             if (userWithdrawProof.regulatorSignature.length != 0) {
                 userWithdrawProof.isConfirmed = true;
             }
         } else if (signer == regulator) {
-            userWithdrawProof.regulatorSignature = signature; 
+            userWithdrawProof.regulatorSignature = signature;
             if (userWithdrawProof.providerSignature.length != 0) {
                 userWithdrawProof.isConfirmed = true;
             }
@@ -390,7 +390,8 @@ contract OffchainPayment {
             channel.userBalance -= userWithdrawProof.amount - channel.userWithdraw;
         }
         emit ConfirmUserWithdraw (
-            userWithdrawProof.channelID,
+            channelID,
+            channel.user,
             signer,
             userWithdrawProof.amount,
             userWithdrawProof.lastCommitBlock,
@@ -714,27 +715,11 @@ contract OffchainPayment {
 
 
         // destroy locked assets
-        bytes32 lockId = keccak256(abi.encodePacked(
-                onchainPayment,
-                channelID,
-                withdraw,
-                lastCommitBlock
-            ));
+        delete userWithdrawProofMap[channelID];
 
-        if (lockedAssetMap[lockId].locked == true){
-            delete lockedAssetMap[lockId];
-        } else {
+        PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
+        paymentNetwork.userTotalWithdraw = paymentNetwork.userTotalWithdraw + amount;
 
-            // calculate deltaWithdrawAmount, add it to PaymentNetwork.userTotalWithdraw
-            uint256 deltaAmount = withdraw - channel.userWithdraw;
-            // set channel user withdrawAmount
-            channel.userWithdraw = withdraw;
-            PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
-            paymentNetwork.userTotalWithdraw = paymentNetwork.userTotalWithdraw + amount;
-
-            channel.userBalance -= deltaAmount;
-
-      }
 
     }
 
@@ -747,26 +732,11 @@ contract OffchainPayment {
         isOperator(msg.sender)
         public
     {
-        /* require(token.isContract() == true, "invalid token address"); */
-        // find payment PaymentNetwork
-        // set providerWithdraw
+        delete providerWithdrawProofMap[token];
 
-        // destroy locked assets
-        bytes32 lockId = keccak256(abi.encodePacked(
-                onchainPayment,
-                token,
-                balance,
-                lastCommitBlock
-            ));
-
-        if (lockedAssetMap[lockId].locked == true){
-            delete lockedAssetMap[lockId];
-        } else {
-            PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
-            paymentNetwork.providerWithdraw = paymentNetwork.providerWithdraw + amount;
-            paymentNetwork.providerBalance = paymentNetwork.providerBalance - amount;
-        }
-
+        /* PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
+        paymentNetwork.providerWithdraw = paymentNetwork.providerWithdraw + amount;
+        paymentNetwork.providerBalance = paymentNetwork.providerBalance - amount; */
     }
 
     function onchainCooperativeSettleChannel(
@@ -778,36 +748,21 @@ contract OffchainPayment {
     isOperator(msg.sender)
     public {
         Channel storage channel = channelMap[channelID];
-        require(channel.status == 1, "channel should be open");
+        require(channel.status == 4, "channel should be waiting for co-close");
 
         channel.status = 3;
 
+        PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
+        paymentNetwork.userTotalDeposit -= channel.userDeposit;
+        paymentNetwork.userTotalWithdraw -= channel.userWithdraw;
 
-        // destroy locked assets
-        bytes32 lockId = keccak256(abi.encodePacked(
-                onchainPayment,
-                channelID,
-                user,
-                balance,
-                lastCommitBlock
-            ));
+        RebalanceProof memory rebalanceProof = rebalanceProofMap[channelID];
+        uint256 channelTotalAmount = channel.userDeposit + rebalanceProof.amount - channel.userWithdraw;
+        uint256 providerSettleAmount = channelTotalAmount - balance;
 
-        if (lockedAssetMap[lockId].locked == true){
-            delete lockedAssetMap[lockId];
-        } else {
+        paymentNetwork.providerTotalSettled += providerSettleAmount;
+        paymentNetwork.providerBalance += providerSettleAmount;
 
-            PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
-            paymentNetwork.userTotalDeposit -= channel.userDeposit;
-            paymentNetwork.userTotalWithdraw -= channel.userWithdraw;
-
-            RebalanceProof memory rebalanceProof = rebalanceProofMap[channelID];
-            uint256 channelTotalAmount = channel.userDeposit + rebalanceProof.amount - channel.userWithdraw;
-            uint256 providerSettleAmount = channelTotalAmount - balance;
-
-            paymentNetwork.providerTotalSettled += providerSettleAmount;
-            paymentNetwork.providerBalance += providerSettleAmount;
-
-        }
     }
 
     function onchainCloseChannel (
@@ -927,17 +882,42 @@ contract OffchainPayment {
 
     }
 
-    function unlockAsset(
-      bytes32[] lockIds
+    function unlockUserWithdrawProof(
+      bytes32 channelID
     )
     public {
-        // how to get currentBlockNumber ? Operator sync blockNumber?
-        uint256 i = 0;
-        while (i < lockIds.length) {
-            //TODO: find lockId, check currentBlockNumber > lastCommitBlock
-            delete lockedAssetMap[lockIds[i]];
-            i += 1;
+        uint256 memory ethBlockNumber =  1;
+        UserWithdrawProof storage userWithdrawProof = userWithdrawProofMap[channelID];
+        Channel storage channel = channelMap[channelID];
+
+        if(userWithdrawProof.lastCommitBlock > 0 && userWithdrawProof.lastCommitBlock < ethBlockNumber) {
+
+            channel.userBalance += userWithdrawProof.amount - channel.userWithdraw;
+            delete userWithdrawProofMap[channelID];
+
+        }else{
+          revert();
         }
+
+    }
+
+    function unlockProviderWithdrawProof(
+      address token
+    )
+    public {
+
+        uint256 memory ethBlockNumber =  1;
+        ProviderWithdrawProof storage providerWithdrawProof = providerWithdrawProofMap[token];
+        PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
+
+        if(providerWithdrawProof.lastCommitBlock > 0 && providerWithdrawProof.lastCommitBlock < ethBlockNumber ){
+            paymentNetwork.providerBalance += providerWithdrawProof.balance - paymentNetwork.providerDeposit;
+            delete providerWithdrawProofMap[channelID];
+        } else {
+            revert();
+        }
+
+
 
     }
 

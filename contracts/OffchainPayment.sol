@@ -29,6 +29,8 @@ contract OffchainPayment {
         uint256 providerTotalSettled;
         // provider offchain balance
         uint256 providerBalance;
+        // provider onchain balance
+        int256 providerOnchainBalance;
     }
 
     // channelID => Channel
@@ -62,6 +64,8 @@ contract OffchainPayment {
         uint256 providerRebalanceOutAmount;
     }
 
+    // channelID => BalanceProof
+    mapping (bytes32 => BalanceProof) public arrearBalanceProofMap;
     struct BalanceProof {
         bytes32 channelID;
         uint256 balance;
@@ -225,13 +229,7 @@ contract OffchainPayment {
             require(balanceProof.nonce < nonce);
             require(balance - balanceProof.balance <= channel.userBalance);
             require(recoveredSignature == channel.user);
-
-            channel.providerBalance += balance - balanceProof.balance;
-            channel.userBalance -= balance - balanceProof.balance;
-            balanceProof.balance = balance;
-            balanceProof.nonce = nonce;
-            balanceProof.additionalHash = additionalHash;
-            balanceProof.signature = signature;
+            arrearBalanceProofMap[channelID] = BalanceProof(channelID, balance, nonce, additionalHash, signature);
         }
         emit Transfer (
             msg.sender,
@@ -269,6 +267,7 @@ contract OffchainPayment {
     }
 
     function submitFee (
+        bytes32 channelID,
         address token,
         uint256 amount,
         uint256 nonce,
@@ -276,6 +275,15 @@ contract OffchainPayment {
     )
         public
     {
+        Channel storage channel = channelMap[channelID];
+        require(token == channel.token);
+        BalanceProof storage balanceProof = balanceProofMap[channelID][provider];
+        channel.providerBalance += arrearBalanceProofMap[channelID].balance - balanceProof.balance;
+        channel.userBalance -= arrearBalanceProofMap[channelID].balance - balanceProof.balance;
+        balanceProof.balance = arrearBalanceProofMap[channelID].balance;
+        balanceProof.nonce = arrearBalanceProofMap[channelID].nonce;
+        balanceProof.additionalHash = arrearBalanceProofMap[channelID].additionalHash;
+        balanceProof.signature = arrearBalanceProofMap[channelID].signature;
         FeeProof storage feeProof = feeProofMap[token];
         require(amount > feeProof.amount);
         require(nonce > feeProof.nonce);
@@ -336,6 +344,7 @@ contract OffchainPayment {
             )
         );
         UserWithdrawProof storage userWithdrawProof = userWithdrawProofMap[channelID];
+        require(amount <= channel.userBalance);
         require(userWithdrawProof.lastCommitBlock < lastCommitBlock);
         // userWithdrawProof.channelID = channelID;
         userWithdrawProof.amount = amount + channel.userWithdraw;
@@ -384,8 +393,8 @@ contract OffchainPayment {
         } else {
             revert();
         }
+        Channel storage channel = channelMap[channelID];
         if (userWithdrawProof.isConfirmed) {
-            Channel storage channel = channelMap[channelID];
             // lockedAssetMap[id] = LockedAsset(true, 2, channel.userWithdraw);
             channel.userBalance -= userWithdrawProof.amount - channel.userWithdraw;
         }
@@ -408,6 +417,8 @@ contract OffchainPayment {
     {
         require(msg.sender == provider);
         ProviderWithdrawProof storage providerWithdrawProof = providerWithdrawProofMap[token];
+        require(balance < paymentNetworkMap[token].providerOnchainBalance);
+        require(uint256(paymentNetworkMap[token].providerOnchainBalance - balance) <= paymentNetworkMap[token].providerBalance);
         require(lastCommitBlock > providerWithdrawProof.lastCommitBlock);
         providerWithdrawProof.balance = balance;
         providerWithdrawProof.lastCommitBlock = lastCommitBlock;
@@ -434,6 +445,7 @@ contract OffchainPayment {
             )
         );
         require(ECDSA.recover(messageHash, signature) == regulator);
+        providerWithdrawProof.signature = signature;
         emit ConfirmProviderWithdraw (
             token,
             providerWithdrawProof.balance,
@@ -526,6 +538,8 @@ contract OffchainPayment {
         require(ECDSA.recover(messageHash, signature) == provider);
         RebalanceProof storage proposeRebalanceProof = proposeRebalanceProofMap[messageHash];
         proposeRebalanceProof.channelID = channelID;
+        require(amount > proposeRebalanceProof.amount);
+        require(amount - proposeRebalanceProof.amount <= paymentNetworkMap[channelMap[channelID].token].providerBalance);
         proposeRebalanceProof.amount = amount;
         proposeRebalanceProof.nonce = nonce;
         proposeRebalanceProof.providerSignature = signature;

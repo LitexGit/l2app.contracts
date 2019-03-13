@@ -63,6 +63,30 @@ contract('OffchainPayment', (accounts) => {
     await this.offchainPayment.userProposeWithdraw(channelID, amount, receiver, lastCommitBlock, {from: userAddress});
   });
 
+  it("integration 2 should success", async()=>{
+    let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
+    let amount = 100000;
+    await this.offchainPayment.onchainOpenChannel(
+      userAddress,
+      tokenAddress,
+      channelID,
+      amount,
+      { from: regulatorAddress}
+    );
+    let balance = 8;
+    let lastCommitBlock = 888;
+    await this.offchainPayment.proposeCooperativeSettle(channelID, balance, lastCommitBlock, {from: userAddress});
+    let messageHash = web3.utils.soliditySha3(providerAddress, channelID, balance, lastCommitBlock);
+    let providerSignature = myEcsign(messageHash, providerPrivateKey);
+    await this.offchainPayment.confirmCooperativeSettle(channelID, providerSignature, {from: providerAddress});
+    let regulatorSignature = myEcsign(messageHash, regulatorPrivateKey);
+    await this.offchainPayment.confirmCooperativeSettle(channelID, regulatorSignature, {from: regulatorAddress});
+
+    await this.offchainPayment.unlockCooperativeSettle(channelID);
+    let channelData = await this.offchainPayment.channelMap.call(channelID);
+    assert.equal(channelData.status.toNumber(), 1, "channel status should be recovered"); 
+  })
+
   it("integration 3 should success", async ()=>{
     let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
     let amount = 100000;
@@ -96,6 +120,34 @@ contract('OffchainPayment', (accounts) => {
     await this.offchainPayment.transfer(providerAddress, channelID, balance, nonce, additionalHash, signature, {from: userAddress});
 
   });
+
+  it("integration 4 should be success", async ()=> {
+    let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
+    let amount = 100000;
+    await this.offchainPayment.onchainOpenChannel(
+      userAddress,
+      tokenAddress,
+      channelID,
+      amount,
+      { from: regulatorAddress}
+    );
+
+    amount = 100;
+    let receiver = userAddress;
+    let lastCommitBlock = 888;
+    await this.offchainPayment.userProposeWithdraw(channelID, amount, receiver, lastCommitBlock, {from: userAddress});
+
+    let messageHash = web3.utils.soliditySha3(providerAddress, channelID, amount, lastCommitBlock);
+    let providerSignature = myEcsign(messageHash, providerPrivateKey);
+    await this.offchainPayment.confirmUserWithdraw(channelID, providerSignature, {from: providerAddress});
+    let regulatorSignature = myEcsign(messageHash, regulatorPrivateKey);
+    await this.offchainPayment.confirmUserWithdraw(channelID, regulatorSignature, {from: regulatorAddress});
+
+    await this.offchainPayment.unlockUserWithdrawProof(channelID);
+
+    let channelData = await this.offchainPayment.channelMap.call(channelID);
+    assert.equal(channelData.userBalance.toNumber(), 100000, "unlock failed");
+  })
 
   it("integration 5 should success", async ()=> {
     let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
@@ -138,7 +190,58 @@ contract('OffchainPayment', (accounts) => {
   })
 
   it("integration 6 should success", async()=>{
-      
+    let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
+    let amount = 1000000;
+    await this.offchainPayment.onchainOpenChannel(
+      userAddress,
+      tokenAddress,
+      channelID,
+      amount,
+      { from: regulatorAddress}
+    );
+
+    // amount = 20000;
+    // await this.offchainPayment.onchainProviderDeposit(tokenAddress, amount, { from: regulatorAddress});
+
+    // amount = 10;
+    // let nonce = 888;
+    // let messageHash = web3.utils.soliditySha3(providerAddress, channelID, amount, nonce);
+    // let signature = myEcsign(messageHash, providerPrivateKey);
+    // await this.offchainPayment.proposeRebalance(channelID, amount, nonce, signature, {from: providerAddress});
+    // signature = myEcsign(messageHash, regulatorPrivateKey);
+    // await this.offchainPayment.confirmRebalance(messageHash, signature, {from: regulatorAddress});
+
+    // let channelData = await this.offchainPayment.channelMap.call(channelID);
+    // console.log("vvv", channelData.providerBalance.toNumber());
+
+    await this.offchainPayment.setFeeRate(tokenAddress, 1, {from: regulatorAddress});
+
+    let balance = 10000;
+    nonce = 1;
+    let additionalHash = channelID;
+    messageHash = web3.utils.soliditySha3(providerAddress, channelID, balance, nonce, additionalHash);
+    signature = myEcsign(messageHash, userPrivateKey);
+    await this.offchainPayment.transfer(providerAddress, channelID, balance, nonce, additionalHash, signature, {from: userAddress});
+
+    let feeData = await this.offchainPayment.feeProofMap.call(tokenAddress);
+    console.log("vv fee amount", feeData.amount.toNumber());
+
+    messageHash = web3.utils.soliditySha3(providerAddress, tokenAddress, 1, 1);
+    signature = myEcsign(messageHash, providerPrivateKey);   
+    await this.offchainPayment.submitFee(channelID, tokenAddress, 1, 1, signature);
+
+    await this.offchainPayment.setFeeRate(tokenAddress, 2, {from: regulatorAddress});
+
+    balance = 20000;
+    nonce = 2;
+    additionalHash = channelID;
+    messageHash = web3.utils.soliditySha3(providerAddress, channelID, balance, nonce, additionalHash);
+    signature = myEcsign(messageHash, userPrivateKey);
+    await this.offchainPayment.transfer(providerAddress, channelID, balance, nonce, additionalHash, signature, {from: userAddress});
+
+    messageHash = web3.utils.soliditySha3(providerAddress, tokenAddress, 3, 2);
+    signature = myEcsign(messageHash, providerPrivateKey);   
+    await this.offchainPayment.submitFee(channelID, tokenAddress, 3, 2, signature);
   })
 
 })

@@ -142,6 +142,9 @@ contract OffchainPayment {
         bytes regulatorSignature;
     }
 
+    // token => feeRate
+    mapping (address => uint256) public feeRateMap;
+
     // token => feeProof
     mapping (address => FeeProof) public feeProofMap;
     struct FeeProof {
@@ -188,6 +191,16 @@ contract OffchainPayment {
     /**
     Functions
      */
+
+    function setFeeRate (
+        address token,
+        uint256 rate
+    )
+        public
+    {
+        require(msg.sender == operator, "invalid sender");
+        feeRateMap[token] = rate;
+    }
 
     function transfer (
         address to,
@@ -276,16 +289,17 @@ contract OffchainPayment {
     )
         public
     {
+        FeeProof storage feeProof = feeProofMap[token];
         Channel storage channel = channelMap[channelID];
         require(token == channel.token);
         BalanceProof storage balanceProof = balanceProofMap[channelID][provider];
-        channel.providerBalance += arrearBalanceProofMap[channelID].balance - balanceProof.balance;
+        channel.providerBalance += arrearBalanceProofMap[channelID].balance - balanceProof.balance - (amount - feeProof.amount);
+        require(amount == feeProof.amount + feeRateMap[token]*(arrearBalanceProofMap[channelID].balance - balanceProof.balance)/10000, "invalid fee");
         channel.userBalance -= arrearBalanceProofMap[channelID].balance - balanceProof.balance;
         balanceProof.balance = arrearBalanceProofMap[channelID].balance;
         balanceProof.nonce = arrearBalanceProofMap[channelID].nonce;
         balanceProof.additionalHash = arrearBalanceProofMap[channelID].additionalHash;
         balanceProof.signature = arrearBalanceProofMap[channelID].signature;
-        FeeProof storage feeProof = feeProofMap[token];
         require(amount > feeProof.amount);
         require(nonce > feeProof.nonce);
         bytes32 messageHash = keccak256(
@@ -910,6 +924,7 @@ contract OffchainPayment {
     )
     public {
         uint256 ethBlockNumber =  MultiSignInterface(operator).getEthBlockNumber();
+        // uint256 ethBlockNumber = 99999;
         UserWithdrawProof storage userWithdrawProof = userWithdrawProofMap[channelID];
         Channel storage channel = channelMap[channelID];
 
@@ -939,6 +954,17 @@ contract OffchainPayment {
     //     } else {
     //         revert();
     //     }
+
+    function unlockCooperativeSettle(
+        bytes32 channelID
+    )
+        public
+    {
+        // uint256 ethBlockNumber = 9999;
+        uint256 ethBlockNumber =  MultiSignInterface(operator).getEthBlockNumber();
+        require(cooperativeSettleProofMap[channelID].lastCommitBlock < ethBlockNumber, "invalid block number");
+        channelMap[channelID].status = 1;
+    }
 
 
 

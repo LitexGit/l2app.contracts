@@ -75,31 +75,7 @@ contract OnchainPayment {
     Initializer
      */
 
-    function initializer (
-        address _regulator,
-        address _provider,
-        uint256 _settleWindowMin,
-        uint256 _settleWindowMax
-    )
-        public
-    {
-        require(!initialized, "only initialize once");
-        require(_settleWindowMin > 0, "invalid settle window min");
-        require(_settleWindowMax > _settleWindowMin, "invalid settle window max");
-
-        regulator = _regulator;
-        provider = _provider;
-        settleWindowMin = _settleWindowMin;
-        settleWindowMax = _settleWindowMax;
-
-        initialized = true;
-    }
-
-    // /**
-    //     Constructor
-    //  */
-
-    // constructor (
+    // function initializer (
     //     address _regulator,
     //     address _provider,
     //     uint256 _settleWindowMin,
@@ -107,14 +83,38 @@ contract OnchainPayment {
     // )
     //     public
     // {
-    //     require(_settleWindowMin > 0);
-    //     require(_settleWindowMax > _settleWindowMin);
+    //     require(!initialized, "only initialize once");
+    //     require(_settleWindowMin > 0, "invalid settle window min");
+    //     require(_settleWindowMax > _settleWindowMin, "invalid settle window max");
 
     //     regulator = _regulator;
     //     provider = _provider;
     //     settleWindowMin = _settleWindowMin;
     //     settleWindowMax = _settleWindowMax;
+
+    //     initialized = true;
     // }
+
+    /**
+    Constructor
+     */
+
+    constructor (
+        address _regulator,
+        address _provider,
+        uint256 _settleWindowMin,
+        uint256 _settleWindowMax
+    )
+        public
+    {
+        require(_settleWindowMin > 0);
+        require(_settleWindowMax > _settleWindowMin);
+
+        regulator = _regulator;
+        provider = _provider;
+        settleWindowMin = _settleWindowMin;
+        settleWindowMax = _settleWindowMax;
+    }
 
     /**
     Modifiers

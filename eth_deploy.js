@@ -1,7 +1,7 @@
 const Web3 = require('web3');
 //Factory.json file contains my compiled Factory.sol file
-const OnchainPayment = require('./build/contracts/MultiSigWallet.json');
-const constructArgs = [['0x4Aa670bCe722B9698A670afc968b1dE5f1553df9'], 1];
+const OnchainPayment = require('./build/contracts/OnchainPayment.json');
+const constructArgs = ['0x4Aa670bCe722B9698A670afc968b1dE5f1553df9', '0xa08105d7650Fe007978a291CcFECbB321fC21ffe', 1, 9];
 
 
 var Tx = require('ethereumjs-tx');
@@ -43,8 +43,8 @@ async function executeTransaction(bytecodeWithParam, nonce){
     var rawTransaction = {
         "from": account.address,
         "nonce": "0x" + nonce.toString(16),
-        "gasPrice": web3.utils.toHex(10 * 1e9),
-        "gasLimit": web3.utils.toHex(6000000),
+        "gasPrice": web3.utils.toHex(50 * 1e9),
+        "gasLimit": web3.utils.toHex(7000000),
         // "to": contractAddress,
         // "value": "0x0",
         "data": bytecodeWithParam,

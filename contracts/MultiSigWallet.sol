@@ -1,4 +1,4 @@
-pragma solidity >=0.4.21 <0.6.0;
+pragma solidity >=0.4.24 <0.6.0;
 
 /// @title Multisignature wallet - Allows multiple parties to agree on transactions before execution.
 contract MultiSigWallet {
@@ -223,7 +223,7 @@ contract MultiSigWallet {
               && external_call(txn.destination, txn.value, txn.data.length, txn.data)){
 
                 if (txn.ethBlockNumber > ethBlockNumber){
-                   ethBlockNumber = txn.ethBlockNumber;
+                    ethBlockNumber = txn.ethBlockNumber;
                 }
 
                 proposedTxMap[txn.txHash] = true;
@@ -251,6 +251,14 @@ contract MultiSigWallet {
             if (count == required)
                 return true;
         }
+    }
+
+    function getEthBlockNumber()
+        external
+        view
+        returns (uint256)
+    {
+        return ethBlockNumber;
     }
 
     /*

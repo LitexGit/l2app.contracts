@@ -2,6 +2,7 @@ pragma solidity >=0.4.24 <0.6.0;
 
 import "./lib/ECDSA.sol";
 import "./lib/Address.sol";
+import "./lib/MultiSignInterface.sol";
 
 contract OffchainPayment {
     /**
@@ -50,7 +51,7 @@ contract OffchainPayment {
         uint256 userBalance;
         // provider offchain balance
         uint256 providerBalance;
-        // 0=not exist, 1=open, 2=closing, 3=settled
+        // 0=not exist, 1=open, 2=closing, 3=settled, 4=waiting co-settle
         uint256 status;
     }
     // record data committed onchain when closing channel
@@ -212,10 +213,10 @@ contract OffchainPayment {
         address recoveredSignature = ECDSA.recover(messageHash, signature);
         if (msg.sender == provider) {
             BalanceProof storage userBalanceProof = balanceProofMap[channelID][to];
-            require(userBalanceProof.balance < balance);
-            require(userBalanceProof.nonce < nonce);
-            require(balance - userBalanceProof.balance <= channel.providerBalance);
-            require(recoveredSignature == provider);
+            require(userBalanceProof.balance < balance, "invalid balance");
+            require(userBalanceProof.nonce < nonce, "invalid nonce");
+            require(balance - userBalanceProof.balance <= channel.providerBalance, "provider insufficient funds");
+            require(recoveredSignature == provider, "invalid signature");
 
             channel.providerBalance -= balance - userBalanceProof.balance;
             channel.userBalance += balance - userBalanceProof.balance;
@@ -225,11 +226,11 @@ contract OffchainPayment {
             userBalanceProof.signature = signature;
         } else {
             BalanceProof storage balanceProof = balanceProofMap[channelID][provider];
-            require(balanceProof.balance < balance);
-            require(balanceProof.nonce < nonce);
-            require(balance - balanceProof.balance <= channel.userBalance);
-            require(recoveredSignature == channel.user);
-            arrearBalanceProofMap[channelID] = BalanceProof(channelID, balance, nonce, additionalHash, signature);
+            require(balanceProof.balance < balance, "invalid balance");
+            require(balanceProof.nonce < nonce, "invalid nonce");
+            require(balance - balanceProof.balance <= channel.userBalance, "user insufficient funds");
+            require(recoveredSignature == channel.user, "invalid signature");
+            arrearBalanceProofMap[channelID] = BalanceProof(channelID, balance, nonce, additionalHash, signature, new bytes(32));
         }
         emit Transfer (
             msg.sender,
@@ -333,6 +334,7 @@ contract OffchainPayment {
         public
     {
         Channel storage channel = channelMap[channelID];
+        require(channel.status == 1);
         require(msg.sender == channel.user);
         require(cooperativeSettleProofMap[channelID].isConfirmed == false);
         bytes32 id = keccak256(
@@ -351,8 +353,8 @@ contract OffchainPayment {
         userWithdrawProof.receiver = receiver;
         userWithdrawProof.lastCommitBlock = lastCommitBlock;
         userWithdrawProof.isConfirmed = false;
-        userWithdrawProof.providerSignature = bytes(0);
-        userWithdrawProof.regulatorSignature = bytes(0);
+        userWithdrawProof.providerSignature.length = 0;
+        userWithdrawProof.regulatorSignature.length = 0;
         emit UserProposeWithdraw(
             channelID,
             channel.user,
@@ -466,7 +468,10 @@ contract OffchainPayment {
         CooperativeSettleProof storage csProof = cooperativeSettleProofMap[channelID];
         require(csProof.isConfirmed == false);
         require(lastCommitBlock > csProof.lastCommitBlock);
-        csProof = CooperativeSettleProof(false, balance, lastCommitBlock, bytes(0), bytes(0));
+        // csProof = CooperativeSettleProof(false, balance, lastCommitBlock, new bytes(0), new bytes(0));
+        csProof.isConfirmed = false;
+        csProof.balance = balance;
+        csProof.lastCommitBlock = lastCommitBlock;
         emit ProposeCooperativeSettle (
             channel.user,
             channelID,
@@ -505,6 +510,7 @@ contract OffchainPayment {
         } else {
             revert();
         }
+        channelMap[channelID].status = 4;
         emit ConfirmCooperativeSettle (
             channelID,
             channelMap[channelID].user,
@@ -569,11 +575,14 @@ contract OffchainPayment {
         );
         require(ECDSA.recover(messageHash, signature) == regulator);
         RebalanceProof storage rebalanceProof = rebalanceProofMap[proposeRebalanceProof.channelID];
+        Channel storage channel = channelMap[proposeRebalanceProof.channelID];
+        channel.providerBalance += proposeRebalanceProof.amount - rebalanceProof.amount;
         rebalanceProof.channelID = proposeRebalanceProof.channelID;
         rebalanceProof.amount = proposeRebalanceProof.amount;
         rebalanceProof.nonce = proposeRebalanceProof.nonce;
         rebalanceProof.providerSignature = proposeRebalanceProof.providerSignature;
         rebalanceProof.regulatorSignature = signature;
+
         emit ConfirmRebalance (
             rebalanceProof.channelID,
             id,
@@ -709,7 +718,7 @@ contract OffchainPayment {
 
         paymentNetwork.providerDeposit = paymentNetwork.providerDeposit + amount;
         paymentNetwork.providerBalance = paymentNetwork.providerBalance + amount;
-
+        paymentNetwork.providerOnchainBalance += int256(amount);
     }
 
     function onchainUserWithdraw (
@@ -789,26 +798,26 @@ contract OffchainPayment {
         isOperator(msg.sender)
         public
     {
-      // find channel
-      Channel storage channel = channelMap[channelID];
-      require(channel.status == 1, "channel should be open");
+        // find channel
+        Channel storage channel = channelMap[channelID];
+        require(channel.status == 1, "channel should be open");
 
-      // set status to close
-      channel.status = 2;
+        // set status to close
+        channel.status = 2;
 
-      ClosingChannel storage closingData = closingChannelMap[channelID];
+        ClosingChannel storage closingData = closingChannelMap[channelID];
 
-      closingData.closer = closer;
-      if (closer == channel.user ) {
-        closingData.providerTransferredAmount = balance;
-        closingData.providerTransferredNonce = nonce;
+        closingData.closer = closer;
+        if (closer == channel.user ) {
+            closingData.providerTransferredAmount = balance;
+            closingData.providerTransferredNonce = nonce;
 
-      } else {
-        closingData.userTransferredAmount = balance;
-        closingData.userTransferredNonce = nonce;
+        } else {
+            closingData.userTransferredAmount = balance;
+            closingData.userTransferredNonce = nonce;
 
-      }
-      closingData.providerRebalanceInAmount = inAmount;
+        }
+        closingData.providerRebalanceInAmount = inAmount;
 
     }
 
@@ -823,14 +832,14 @@ contract OffchainPayment {
         public
     {
       // find channel
-      Channel storage channel = channelMap[channelID];
-      require(channel.status == 2, "channel should be close");
+        Channel storage channel = channelMap[channelID];
+        require(channel.status == 2, "channel should be close");
 
-      ClosingChannel storage closingData = closingChannelMap[channelID];
-      closingData.providerTransferredAmount = providerBalance;
-      closingData.providerTransferredNonce = providerNonce;
-      closingData.userTransferredAmount = userBalance;
-      closingData.userTransferredNonce = userNonce;
+        ClosingChannel storage closingData = closingChannelMap[channelID];
+        closingData.providerTransferredAmount = providerBalance;
+        closingData.providerTransferredNonce = providerNonce;
+        closingData.userTransferredAmount = userBalance;
+        closingData.userTransferredNonce = userNonce;
 
     }
 
@@ -841,12 +850,12 @@ contract OffchainPayment {
         isOperator(msg.sender)
         public
     {
-      // find channel
-      Channel storage channel = channelMap[channelID];
-      require(channel.status == 2, "channel should be close");
-      // set status
-      ClosingChannel storage closingData = closingChannelMap[channelID];
-      closingData.providerRebalanceInAmount = inAmount;
+        // find channel
+        Channel storage channel = channelMap[channelID];
+        require(channel.status == 2, "channel should be close");
+        // set status
+        ClosingChannel storage closingData = closingChannelMap[channelID];
+        closingData.providerRebalanceInAmount = inAmount;
 
     }
 
@@ -858,82 +867,82 @@ contract OffchainPayment {
         isOperator(msg.sender)
         public
     {
-      // find channel
-      Channel storage channel = channelMap[channelID];
-      require(channel.status == 2, "channel should be close");
-      // set status, settled
-      channel.status = 3;
+        // find channel
+        Channel storage channel = channelMap[channelID];
+        require(channel.status == 2, "channel should be close");
+        // set status, settled
+        channel.status = 3;
 
-      // change channel data && paymentNetwork data
-      // check userSettleAmount & providerSettleAmount
-      // set paymentNetwork.userCount/userTotalDeposit/userTotalWithdraw/providerBalance/providerRebalanceIn
+        // change channel data && paymentNetwork data
+        // check userSettleAmount & providerSettleAmount
+        // set paymentNetwork.userCount/userTotalDeposit/userTotalWithdraw/providerBalance/providerRebalanceIn
 
-      PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
+        PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
 
-      paymentNetwork.userCount -= 1;
-      paymentNetwork.userTotalDeposit -= channel.userDeposit;
-      paymentNetwork.userTotalWithdraw -= channel.userWithdraw;
-      paymentNetwork.providerTotalSettled += providerSettleAmount;
-      paymentNetwork.providerBalance += providerSettleAmount;
+        paymentNetwork.userCount -= 1;
+        paymentNetwork.userTotalDeposit -= channel.userDeposit;
+        paymentNetwork.userTotalWithdraw -= channel.userWithdraw;
+        paymentNetwork.providerTotalSettled += providerSettleAmount;
+        paymentNetwork.providerBalance += providerSettleAmount;
 
     }
 
 
     function setOperator(
-      address newOperator
-      )
+        address newOperator
+    )
     /* isOperator(msg.sender) */
     public {
 
-      /* require(newOperator.isContract() == true, "invalid contract address"); */
-      require(newOperator != operator, "change operator to the same address");
+        /* require(newOperator.isContract() == true, "invalid contract address"); */
+        require(newOperator != operator, "change operator to the same address");
 
-      emit OperatorChanged(
-        operator,
-        newOperator
-        );
-      operator = newOperator;
+        emit OperatorChanged(
+            operator,
+            newOperator
+            );
+        operator = newOperator;
 
     }
 
     function unlockUserWithdrawProof(
-      bytes32 channelID
+        bytes32 channelID
     )
     public {
-        uint256 ethBlockNumber =  1;
+        uint256 ethBlockNumber =  MultiSignInterface(operator).getEthBlockNumber();
         UserWithdrawProof storage userWithdrawProof = userWithdrawProofMap[channelID];
         Channel storage channel = channelMap[channelID];
 
-        if(userWithdrawProof.lastCommitBlock > 0 && userWithdrawProof.lastCommitBlock < ethBlockNumber) {
+        if(userWithdrawProof.lastCommitBlock > 0 && userWithdrawProof.lastCommitBlock < ethBlockNumber && userWithdrawProof.isConfirmed) {
 
             channel.userBalance += userWithdrawProof.amount - channel.userWithdraw;
             delete userWithdrawProofMap[channelID];
 
         }else{
-          revert();
-        }
-
-    }
-
-    function unlockProviderWithdrawProof(
-      address token
-    )
-    public {
-
-        uint256 ethBlockNumber =  1;
-        ProviderWithdrawProof storage providerWithdrawProof = providerWithdrawProofMap[token];
-        PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
-
-        if(providerWithdrawProof.lastCommitBlock > 0 && providerWithdrawProof.lastCommitBlock < ethBlockNumber ){
-            paymentNetwork.providerBalance += providerWithdrawProof.balance - paymentNetwork.providerDeposit;
-            delete providerWithdrawProofMap[token];
-        } else {
             revert();
         }
 
-
-
     }
+
+    // function unlockProviderWithdrawProof(
+    //     address token
+    // )
+    // public {
+
+    //     // uint256 ethBlockNumber =  1;
+    //     ProviderWithdrawProof storage providerWithdrawProof = providerWithdrawProofMap[token];
+    //     PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
+
+    //     if(providerWithdrawProof.lastCommitBlock > 0 && providerWithdrawProof.lastCommitBlock < ethBlockNumber ){
+    //         paymentNetwork.providerBalance += providerWithdrawProof.balance - paymentNetwork.providerDeposit;
+    //         delete providerWithdrawProofMap[token];
+    //     } else {
+    //         revert();
+    //     }
+
+
+
+    // }
 
     /**
      Events
@@ -942,7 +951,7 @@ contract OffchainPayment {
     event OperatorChanged (
       address indexed oldOperator,
       address indexed newOperator
-      );
+    );
 
     event Transfer (
         address indexed from,

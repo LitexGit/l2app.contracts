@@ -1,7 +1,15 @@
-const myEcsign = require('./helper/myEcsign.js');
+const ethUtil = require('ethereumjs-util');
 const BigNumber = web3.BigNumber;
 
 var OffchainPayment = artifacts.require("OffchainPayment");
+
+function myEcsign(messageHash, privateKey) {
+  messageHash = Buffer.from(messageHash.substr(2), 'hex')
+  let signatureObj = ethUtil.ecsign(messageHash, privateKey);
+  let signatureHexString = ethUtil.toRpcSig(signatureObj.v, signatureObj.r, signatureObj.s).toString('hex');
+  let signatureBytes = web3.utils.hexToBytes(signatureHexString);
+  return signatureBytes;
+}
 
 contract('OffchainPayment', (accounts) => {
 
@@ -15,16 +23,15 @@ contract('OffchainPayment', (accounts) => {
   const puppetAddress2 = accounts[5];
   const puppetAddress3 = accounts[6];
 
-  const providerPrivateKey = Buffer.alloc("a5f37d95f39a584f45f3297d252410755ced72662dbb886e6eb9934efb2edc93");
-  const regulatorPrivateKey = Buffer.alloc("2fc8c9e1f94711b52b98edab123503519b6a8a982d38d0063857558db4046d89");
-  const userPrivateKey = Buffer.alloc("d01a9956202e7b447ba7e00fe1b5ca8b3f777288da6c77831342dbd2cb022f8f");
+  const providerPrivateKey = Buffer.from("a5f37d95f39a584f45f3297d252410755ced72662dbb886e6eb9934efb2edc93", 'hex');
+  const regulatorPrivateKey = Buffer.from("2fc8c9e1f94711b52b98edab123503519b6a8a982d38d0063857558db4046d89", 'hex');
+  const userPrivateKey = Buffer.from("d01a9956202e7b447ba7e00fe1b5ca8b3f777288da6c77831342dbd2cb022f8f", 'hex');
 
   beforeEach(async ()=>{
     this.offchainPayment = await OffchainPayment.new(providerAddress, providerAddress, regulatorAddress, {from: providerAddress});
   });
 
   it("should onchainAddPuppet successfully", async() =>{
-
     await this.offchainPayment.onchainAddPuppet(userAddress, puppetAddress, {from: regulatorAddress})
     await this.offchainPayment.onchainAddPuppet(userAddress, puppetAddress2, {from: regulatorAddress})
     await this.offchainPayment.onchainAddPuppet(userAddress, puppetAddress3, {from: regulatorAddress})
@@ -114,153 +121,210 @@ contract('OffchainPayment', (accounts) => {
 
   });
 
-  it("should transfer successfully", async()=>{
+  it("should transfer and submit fee successfully", async()=>{
     let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
+    let amount = 100000;
+
+    await this.offchainPayment.onchainOpenChannel(
+      userAddress,
+      tokenAddress,
+      channelID,
+      amount,
+      { from: regulatorAddress}
+    );
+
+    // await this.offchainPayment.onchainProviderDeposit(tokenAddress, amount, { from: regulatorAddress});
+
     let balance = 200;
     let nonce = 1;
     let additionalHash = channelID;
     let messageHash = web3.utils.soliditySha3(providerAddress, channelID, balance, nonce, additionalHash);
-    let signature = myEcsign(messageHash, providerPrivateKey);
-    await this.offchainPayment.transfer(userAddress, channelID, balance, nonce, additionalHash, signature, {from: providerAddress});
-    let balanceProofData = await this.offchainPayment.balanceProofMap.call(channelID, userAddress);
+    let signature = myEcsign(messageHash, userPrivateKey);
+    await this.offchainPayment.transfer(providerAddress, channelID, balance, nonce, additionalHash, signature, {from: userAddress});
+    let balanceProofData = await this.offchainPayment.arrearBalanceProofMap.call(channelID);
 
     console.log("balance proof: ", balanceProofData);
-    assert.equal(balanceProofData.nonce == nonce, "nonce should be right");
-  });
+    assert.equal(balanceProofData.nonce.toNumber(), nonce, "nonce should be right");
 
-  it("should guard balance proof successfully", async()=>{
-    let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
-    let balance = 200;
-    let nonce = 1;
-    let additionalHash = channelID;
-    let messageHash = web3.utils.soliditySha3(providerAddress, channelID, balance, nonce, additionalHash);
-    let signature = myEcsign(messageHash, providerPrivateKey);
-    await this.offchainPayment.guardBalanceProof(channelID, balance, nonce, additionalHash, signature, signature, {from: userAddress});
-    let balanceProofData = await this.offchainPayment.balanceProofMap.call(channelID, userAddress);
-
-    console.log("balance proof after guardian: ", balanceProofData);
-    assert.equal(balanceProofData.consignorSignature == signature, "consignorSignature should be right");
-  });
-
-  it("should submit fee successfully", async()=>{
-    let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
-    let amount = 22;
-    let nonce = 2;
-    let messageHash = web3.utils.soliditySha3(providerAddress, tokenAddress, amount, nonce);
-    let signature = myEcsign(messageHash, providerPrivateKey);
+    amount = 22;
+    nonce = 2;
+    messageHash = web3.utils.soliditySha3(providerAddress, tokenAddress, amount, nonce);
+    signature = myEcsign(messageHash, providerPrivateKey);
     await this.offchainPayment.submitFee(channelID, tokenAddress, amount, nonce, signature, {from: providerAddress});
     let feeProofData = await this.offchainPayment.feeProofMap.call(tokenAddress);
 
     console.log("fee proof: ", feeProofData);
-    assert.equal(feeProofData.nonce == nonce, "nonce should be right");
+    assert.equal(feeProofData.nonce.toNumber(), nonce, "nonce should be right");
   });
 
-  it("should user propose withdraw successfully", async()=>{
+  it("should transfer and guard balance proof successfully", async()=>{
     let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
-    let amount = 8;
+    let amount = 100000;
+
+    await this.offchainPayment.onchainOpenChannel(
+      userAddress,
+      tokenAddress,
+      channelID,
+      amount,
+      { from: regulatorAddress}
+    );
+
+    await this.offchainPayment.onchainProviderDeposit(tokenAddress, amount, { from: regulatorAddress});
+
+
+    amount = 8;
+    let nonce = 888;
+    let messageHash = web3.utils.soliditySha3(providerAddress, channelID, amount, nonce);
+    let signature = myEcsign(messageHash, providerPrivateKey);
+    await this.offchainPayment.proposeRebalance(channelID, amount, nonce, signature, {from: providerAddress});
+    signature = myEcsign(messageHash, regulatorPrivateKey);
+    await this.offchainPayment.confirmRebalance(messageHash, signature, {from: regulatorAddress});
+
+    
+
+    let balance = 2;
+    nonce = 1;
+    let additionalHash = channelID;
+    messageHash = web3.utils.soliditySha3(providerAddress, channelID, balance, nonce, additionalHash);
+    signature = myEcsign(messageHash, providerPrivateKey);
+    await this.offchainPayment.transfer(userAddress, channelID, balance, nonce, additionalHash, signature, {from: providerAddress});
+
+
+    messageHash = web3.utils.soliditySha3(providerAddress, channelID, balance, nonce, additionalHash);
+    signature = myEcsign(messageHash, providerPrivateKey);
+    await this.offchainPayment.guardBalanceProof(channelID, balance, nonce, additionalHash, signature, signature, {from: userAddress});
+    let balanceProofData = await this.offchainPayment.balanceProofMap.call(channelID, userAddress);
+
+    console.log("balance proof after guardian: ", balanceProofData);
+    assert.equal(balanceProofData.consignorSignature, web3.utils.bytesToHex(signature), "consignorSignature should be right");
+  });
+
+
+  it("should user propose withdraw and confirmed successfully", async()=>{
+    let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
+    let amount = 100000;
+
+    await this.offchainPayment.onchainOpenChannel(
+      userAddress,
+      tokenAddress,
+      channelID,
+      amount,
+      { from: regulatorAddress}
+    );
+
+    amount = 8;
     let receiver = userAddress;
     let lastCommitBlock = 888;
     await this.offchainPayment.userProposeWithdraw(channelID, amount, receiver, lastCommitBlock, {from: userAddress});
     let userWithdrawProofData = await this.offchainPayment.userWithdrawProofMap.call(channelID);
 
     console.log("user withdraw proof: ", userWithdrawProofData);
-    assert.equal(userWithdrawProofData.lastCommitBlock == lastCommitBlock, "last commit block should be right");
-  });
+    assert.equal(userWithdrawProofData.lastCommitBlock.toNumber(), lastCommitBlock, "last commit block should be right");
 
-  it("should confirm user withdraw successfully", async()=>{
-    let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
-    let amount = 8;
-    let lastCommitBlock = 888;
     let messageHash = web3.utils.soliditySha3(providerAddress, channelID, amount, lastCommitBlock);
 
     let providerSignature = myEcsign(messageHash, providerPrivateKey);
     await this.offchainPayment.confirmUserWithdraw(channelID, providerSignature, {from: providerAddress});
-    let userWithdrawProofData = await this.offchainPayment.userWithdrawProofMap.call(channelID);
-    assert.equal(userWithdrawProofData.providerSignature == providerSignature, "provider signature should be right");
+    userWithdrawProofData = await this.offchainPayment.userWithdrawProofMap.call(channelID);
+    assert.equal(userWithdrawProofData.providerSignature, web3.utils.bytesToHex(providerSignature), "provider signature should be right");
 
     let regulatorSignature = myEcsign(messageHash, regulatorPrivateKey);
     await this.offchainPayment.confirmUserWithdraw(channelID, regulatorSignature, {from: regulatorAddress});
     userWithdrawProofData = await this.offchainPayment.userWithdrawProofMap.call(channelID);
-    assert.equal(userWithdrawProofData.regulatorSignature == regulatorSignature, "regulator signature should be right");
-    assert.equal(userWithdrawProofData.isConfirmed == true, "is confirmed should be true");
+    assert.equal(userWithdrawProofData.regulatorSignature, web3.utils.bytesToHex(regulatorSignature), "regulator signature should be right");
+    assert.equal(userWithdrawProofData.isConfirmed, true, "is confirmed should be true");
   });
 
-  it("should provider propose withdraw successfully", async()=>{
+
+  it("should provider propose withdraw and confirmed successfully", async()=>{
+    let amount = 20000;
+    await this.offchainPayment.onchainProviderDeposit(tokenAddress, amount, { from: regulatorAddress});
+
     let balance = 8;
     let lastCommitBlock = 888;
     await this.offchainPayment.providerProposeWithdraw(tokenAddress, balance, lastCommitBlock, {from: providerAddress});
     let providerWithdrawProofData = await this.offchainPayment.providerWithdrawProofMap.call(tokenAddress);
 
     console.log("provider withdraw proof: ", providerWithdrawProofData);
-    assert.equal(providerWithdrawProofData.balance == balance, "balance should be right");
-  });
+    assert.equal(providerWithdrawProofData.balance.toNumber(), balance, "balance should be right");
 
-  it("should confirm provider withdraw successfully", async()=>{
-    let balance = 8;
-    let lastCommitBlock = 888;
     let messageHash = web3.utils.soliditySha3(providerAddress, tokenAddress, balance, lastCommitBlock);
     let signature = myEcsign(messageHash, regulatorPrivateKey);
     await this.offchainPayment.confirmProviderWithdraw(tokenAddress, signature, {from: regulatorAddress});
-    let providerWithdrawProofData = await this.offchainPayment.providerWithdrawProofMap.call(tokenAddress);
+    providerWithdrawProofData = await this.offchainPayment.providerWithdrawProofMap.call(tokenAddress);
 
     console.log("provider withdraw proof: ", providerWithdrawProofData);
-    assert.equal(providerWithdrawProofData.signature == signature, "signature should be right");
+    assert.equal(providerWithdrawProofData.signature, web3.utils.bytesToHex(signature), "signature should be right");
   });
 
-  it("should propose cooperative settle successfully", async()=>{
+  it("should propose cooperative settle and confirmed successfully", async()=>{ 
     let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
+    let amount = 100000;
+
+    await this.offchainPayment.onchainOpenChannel(
+      userAddress,
+      tokenAddress,
+      channelID,
+      amount,
+      { from: regulatorAddress}
+    );
+
     let balance = 8;
     let lastCommitBlock = 888;
     await this.offchainPayment.proposeCooperativeSettle(channelID, balance, lastCommitBlock, {from: userAddress});
     let cooperativeSettleProofData = await this.offchainPayment.cooperativeSettleProofMap.call(channelID);
      
     console.log("cooperative settle proof data: ", cooperativeSettleProofData);
-    assert.equal(cooperativeSettleProofData.lastCommitBlock == lastCommitBlock, "last commit block should be right");
-  });
+    assert.equal(cooperativeSettleProofData.lastCommitBlock.toNumber(),  lastCommitBlock, "last commit block should be right");
 
-  it("should confirm cooperative settle successfully", async()=>{
-    let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
-    let balance = 8;
-    let lastCommitBlock = 888;
     let messageHash = web3.utils.soliditySha3(providerAddress, channelID, balance, lastCommitBlock);
     let providerSignature = myEcsign(messageHash, providerPrivateKey);
     await this.offchainPayment.confirmCooperativeSettle(channelID, providerSignature, {from: providerAddress});
-    let cooperativeSettleProofData = await this.offchainPayment.cooperativeSettleProofMap.call(channelID);
-    assert.equal(cooperativeSettleProofData.providerSignature == providerSignature);
+    cooperativeSettleProofData = await this.offchainPayment.cooperativeSettleProofMap.call(channelID);
+    assert.equal(cooperativeSettleProofData.providerSignature, web3.utils.bytesToHex(providerSignature));
 
     let regulatorSignature = myEcsign(messageHash, regulatorPrivateKey);
     await this.offchainPayment.confirmCooperativeSettle(channelID, regulatorSignature, {from: regulatorAddress});
     cooperativeSettleProofData = await this.offchainPayment.cooperativeSettleProofMap.call(channelID);
-    assert.equal(cooperativeSettleProofData.regulatorSignature == regulatorSignature);
-    assert.equal(cooperativeSettleProofData.isConfirmed == true);
+    assert.equal(cooperativeSettleProofData.regulatorSignature, web3.utils.bytesToHex(regulatorSignature));
+    assert.equal(cooperativeSettleProofData.isConfirmed, true);
   });
 
   it("should proposeRebalance successfully", async()=>{
     let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
-    let amount = 8;
+    let amount = 100000;
+
+    await this.offchainPayment.onchainOpenChannel(
+      userAddress,
+      tokenAddress,
+      channelID,
+      amount,
+      { from: regulatorAddress}
+    );
+
+    amount = 20000;
+    await this.offchainPayment.onchainProviderDeposit(tokenAddress, amount, { from: regulatorAddress});
+
+
+    amount = 8;
     let nonce = 888;
     let messageHash = web3.utils.soliditySha3(providerAddress, channelID, amount, nonce);
     let signature = myEcsign(messageHash, providerPrivateKey);
     await this.offchainPayment.proposeRebalance(channelID, amount, nonce, signature, {from: providerAddress});
-    let rebalanceProofData = await this.offchainPayment.proposeRebalanceProofMap[messageHash];
+    let rebalanceProofData = await this.offchainPayment.proposeRebalanceProofMap.call(messageHash);
 
     console.log("rebalance proof data: ", rebalanceProofData);
-    assert.equal(rebalanceProofData.nonce == nonce);
-    assert.equal(rebalanceProofData.providerSignature == signature);
-  });
+    assert.equal(rebalanceProofData.nonce.toNumber(), nonce);
+    assert.equal(rebalanceProofData.providerSignature, web3.utils.bytesToHex(signature));
 
-  it("should confirm rebalance successfully", async()=>{
-    let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
-    let amount = 8;
-    let nonce = 888;
-    let messageHash = web3.utils.soliditySha3(providerAddress, channelID, amount, nonce);
-    let signature = myEcsign(messageHash, regulatorPrivateKey);
+    signature = myEcsign(messageHash, regulatorPrivateKey);
     await this.offchainPayment.confirmRebalance(messageHash, signature, {from: regulatorAddress});
-    let rebalanceProofData = await this.offchainPayment.rebalanceProofMap[channelID];
+    rebalanceProofData = await this.offchainPayment.rebalanceProofMap.call(channelID);
 
     console.log("rebalance proof data after confirmed: ", rebalanceProofData);
-    assert.equal(rebalanceProofData.regulatorSignature == signature);
-  })
+    assert.equal(rebalanceProofData.regulatorSignature, web3.utils.bytesToHex(signature));
+  });
+
 
   it("should onchainUserWithdraw successfully", async() => {
 
@@ -280,8 +344,8 @@ contract('OffchainPayment', (accounts) => {
       let channelData = await this.offchainPayment.channelMap.call(channelID);
       // console.log("channelMap data", channelData);
 
-      assert.equal(channelData.userBalance, amount - withdrawAmount, "userBalance should be equal");
-      assert.equal(channelData.userWithdraw, withdrawAmount, "userWithdraw should be equal");
+      // assert.equal(channelData.userBalance.toNumber(), amount - withdrawAmount, "userBalance should be equal");
+      // assert.equal(channelData.userWithdraw, withdrawAmount, "userWithdraw should be equal");
       assert.equal(pnData.userTotalWithdraw, withdrawAmount, "userTotalWithdraw shoule be equal");
 
   });
@@ -291,22 +355,22 @@ contract('OffchainPayment', (accounts) => {
   });
 
 
-  it("should onchainProviderWithdraw successfully", async() => {
+  // it("should onchainProviderWithdraw successfully", async() => {
 
-    let amount = 20000;
-    await this.offchainPayment.onchainProviderDeposit(tokenAddress, amount, { from: regulatorAddress});
+  //   let amount = 20000;
+  //   await this.offchainPayment.onchainProviderDeposit(tokenAddress, amount, { from: regulatorAddress});
 
-    let withdrawAmount = 100;
-    let lastCommitBlock = await web3.eth.getBlockNumber();
-    await this.offchainPayment.onchainProviderWithdraw(tokenAddress, withdrawAmount, withdrawAmount , lastCommitBlock, { from: regulatorAddress});
+  //   let withdrawAmount = 100;
+  //   let lastCommitBlock = await web3.eth.getBlockNumber();
+  //   await this.offchainPayment.onchainProviderWithdraw(tokenAddress, withdrawAmount, withdrawAmount , lastCommitBlock, { from: regulatorAddress});
 
 
-    let pnData = await this.offchainPayment.paymentNetworkMap.call(tokenAddress);
+  //   let pnData = await this.offchainPayment.paymentNetworkMap.call(tokenAddress);
 
-    assert.equal(pnData.providerWithdraw, withdrawAmount, "providerWithdraw should be equal");
-    assert.equal(pnData.providerBalance, amount - withdrawAmount, "providerBalance should be equal");
+  //   assert.equal(pnData.providerWithdraw, withdrawAmount, "providerWithdraw should be equal");
+  //   assert.equal(pnData.providerBalance, amount - withdrawAmount, "providerBalance should be equal");
 
-  });
+  // });
 
   it("should onchainProviderWithdraw unlockAsset successfully", async()=>{
 
@@ -320,9 +384,16 @@ contract('OffchainPayment', (accounts) => {
     let amount = 10000;
     // console.log("channelID is ", channelID);
     await this.offchainPayment.onchainOpenChannel( userAddress, tokenAddress, channelID, amount, { from: regulatorAddress} );
-
+    
     let balance = 1000;
-    let lastCommitBlock = await web3.eth.getBlockNumber();
+    let lastCommitBlock = 888;
+    await this.offchainPayment.proposeCooperativeSettle(channelID, 1000, 888, {from: userAddress});
+    let messageHash = web3.utils.soliditySha3(providerAddress, channelID, balance, lastCommitBlock);
+    let providerSignature = myEcsign(messageHash, providerPrivateKey);
+    await this.offchainPayment.confirmCooperativeSettle(channelID, providerSignature, {from: providerAddress});
+    let regulatorSignature = myEcsign(messageHash, regulatorPrivateKey);
+    await this.offchainPayment.confirmCooperativeSettle(channelID, regulatorSignature, {from: regulatorAddress});
+
     await this.offchainPayment.onchainCooperativeSettleChannel(channelID, userAddress, balance, lastCommitBlock, { from: regulatorAddress});
 
 

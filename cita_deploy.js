@@ -8,13 +8,14 @@ const {
 } = require('./build/contracts/OffchainPayment.json')
 // } = require('./cita_compiled.js');
 
-let constructArgs = ['0x4Aa670bCe722B9698A670afc968b1dE5f1553df9', '0x4Aa670bCe722B9698A670afc968b1dE5f1553df9', '0x4Aa670bCe722B9698A670afc968b1dE5f1553df9'];
+let constructArgs = ['0x224D32fB0A315ACDE49A6eaDD383977746B59107', '0xa08105d7650Fe007978a291CcFECbB321fC21ffe', '0x4Aa670bCe722B9698A670afc968b1dE5f1553df9', '0xf6486AB66Fa7e3af90098cBD9cd6342E422A1c3F'];
 
 let config = {
-  chain: 'https://node.cryptape.com',
+  // chain: 'https://node.cryptape.com',
 // chain: 'http://13.113.50.143:1337',
 // chain: 'http://121.196.200.225:1337',
-  privateKey: 'DDC1738AC05989633A43A49FB8B9FBE77970CCA9F85921768C2BD8FABBFB2E55',
+  chain: 'http://wallet.milewan.com:8090',
+  privateKey: '0xDDC1738AC05989633A43A49FB8B9FBE77970CCA9F85921768C2BD8FABBFB2E55',
 }
 
 

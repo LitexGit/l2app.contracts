@@ -1,3 +1,12 @@
+/**
+ * 1. 用户协商关请求提交成功后，针对该通道的transfer以及withdraw请求将无法提交
+    2. 用户协商关请求提交成功后，超过指定的lastCommitBlock后，可以调用相应的unlock进行解锁
+    3. 用户取现请求提交后，用户马上进行转账操作(转账金额位于【取现成功后金额，取现前余额】之间)，provider/regulator提交审核时应该不予通过
+    4. 用户取现请求提交成功后，超过指定的lastCommitBlock后，可以调用响应的unlock进行解锁
+    5. 手续费测试：用户和CP在通道余额均为10，用户转账5，provider未提交submitFee，provider提交给用户转账12的请求，请求被合约revert
+    6. 手续费率设置测试，regulator有权限修改当前系统的手续费率，支付合约中每个token对应一个手续费率
+    regulator设置当前手续费率为0.001, 用户给CP转账1后（CP提交submitFee），regulator更改当前手续费为0.002, 用户再给CP转账1后（CP提交submitFee），此时收到的总手续费应该为 1*0.001 + 1*0.002 = 0.003
+ */
 const ethUtil = require('ethereumjs-util');
 const BigNumber = web3.BigNumber;
 

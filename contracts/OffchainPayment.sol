@@ -178,14 +178,15 @@ contract OffchainPayment {
     constructor (
         address _onchainPayment,
         address _provider,
-        address _regulator
+        address _regulator,
+        address _operator
     )
         public
     {
         onchainPayment = _onchainPayment;
         provider = _provider;
         regulator = _regulator;
-        operator = _regulator;
+        operator = _operator;
     }
 
     /**
@@ -243,7 +244,16 @@ contract OffchainPayment {
             require(balanceProof.nonce < nonce, "invalid nonce");
             require(balance - balanceProof.balance <= channel.userBalance, "user insufficient funds");
             require(recoveredSignature == channel.user, "invalid signature");
-            arrearBalanceProofMap[channelID] = BalanceProof(channelID, balance, nonce, additionalHash, signature, new bytes(32));
+            if (feeRateMap[channel.token] == 0) {
+                channel.providerBalance += balance - balanceProof.balance;
+                channel.userBalance -= balance - balanceProof.balance;
+                balanceProof.balance = balance;
+                balanceProof.nonce = nonce;
+                balanceProof.additionalHash = additionalHash;
+                balanceProof.signature = signature;
+            } else {
+                arrearBalanceProofMap[channelID] = BalanceProof(channelID, balance, nonce, additionalHash, signature, new bytes(32));
+            }
         }
         emit Transfer (
             msg.sender,
@@ -266,11 +276,11 @@ contract OffchainPayment {
         public
     {
         Channel storage channel = channelMap[channelID];
-        require(msg.sender == channel.user);
+        require(isPuppet(channel.user, msg.sender), "invalid puppet");
         require(channel.status == 1);
         BalanceProof storage balanceProof = balanceProofMap[channelID][channel.user];
-        require(balanceProof.balance == balance);
-        require(balanceProof.nonce == nonce);
+        require(balanceProof.balance == balance, "invalid balance");
+        require(balanceProof.nonce == nonce, "invalid nonce");
         balanceProof.consignorSignature = consignorSignature;
         emit GuardBalanceProof (
             msg.sender,
@@ -292,6 +302,7 @@ contract OffchainPayment {
         FeeProof storage feeProof = feeProofMap[token];
         Channel storage channel = channelMap[channelID];
         require(token == channel.token);
+        require(feeRateMap[token] != 0, "should not submit fee");
         BalanceProof storage balanceProof = balanceProofMap[channelID][provider];
         channel.providerBalance += arrearBalanceProofMap[channelID].balance - balanceProof.balance - (amount - feeProof.amount);
         require(amount == feeProof.amount + feeRateMap[token]*(arrearBalanceProofMap[channelID].balance - balanceProof.balance)/10000, "invalid fee");
@@ -349,7 +360,7 @@ contract OffchainPayment {
     {
         Channel storage channel = channelMap[channelID];
         require(channel.status == 1);
-        require(msg.sender == channel.user);
+        require(isPuppet(channel.user, msg.sender));
         require(cooperativeSettleProofMap[channelID].isConfirmed == false);
         bytes32 id = keccak256(
             abi.encodePacked(
@@ -477,7 +488,8 @@ contract OffchainPayment {
         public
     {
         Channel storage channel = channelMap[channelID];
-        require(msg.sender == channel.user);
+        require(channel.userBalance >= balance, "user insufficient funds");
+        require(isPuppet(channel.user, msg.sender));
         require(userWithdrawProofMap[channelID].isConfirmed == false);
         CooperativeSettleProof storage csProof = cooperativeSettleProofMap[channelID];
         require(csProof.isConfirmed == false);
@@ -709,7 +721,7 @@ contract OffchainPayment {
 
         uint256 deltaDeposit = deposit - channel.userDeposit;
         channel.userDeposit = deposit;
-
+        channel.userBalance += deltaDeposit;
         // calculate deltaDeposit, add deltaDeposit to paymentNetwork.userTotalDeposit
         PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
         paymentNetwork.userTotalDeposit = paymentNetwork.userTotalDeposit + deltaDeposit;
@@ -964,6 +976,28 @@ contract OffchainPayment {
         uint256 ethBlockNumber =  MultiSignInterface(operator).getEthBlockNumber();
         require(cooperativeSettleProofMap[channelID].lastCommitBlock < ethBlockNumber, "invalid block number");
         channelMap[channelID].status = 1;
+    }
+
+    function isPuppet(
+        address user,
+        address puppet
+    )
+        public
+        returns(bool)
+    {
+        Puppet[] storage puppetList = puppets[user];
+
+        uint256 i = 0;
+        while (i < puppetList.length) {
+            if (puppetList[i].p == puppet && puppetList[i].enabled){
+                return true;
+            }
+            i += 1;
+        }
+
+        if (i == puppetList.length) {
+            return false;
+        }
     }
 
 

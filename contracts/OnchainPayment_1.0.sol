@@ -71,6 +71,15 @@ contract OnchainPayment {
     mapping(bytes32 => string) internal stringStorage;
     mapping(bytes32 => bytes) internal bytesStorage;
 
+    // EIP712
+    bytes32 public DOMAIN_SEPERATOR;
+    bytes32 public constant TRANSFER_TYPEHASH = keccak256(
+        "Transfer(bytes32 channelID,uint256 balance,uint256 nonce,bytes32 additionalHash)"
+    );
+    bytes32 public constant EIP712DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
+
     /**
     Initializer
      */
@@ -103,7 +112,8 @@ contract OnchainPayment {
         address _regulator,
         address _provider,
         uint256 _settleWindowMin,
-        uint256 _settleWindowMax
+        uint256 _settleWindowMax,
+        uint256 _chainID
     )
         public
     {
@@ -114,6 +124,15 @@ contract OnchainPayment {
         provider = _provider;
         settleWindowMin = _settleWindowMin;
         settleWindowMax = _settleWindowMax;
+
+        DOMAIN_SEPERATOR =  keccak256(
+            abi.encode(
+                EIP712DOMAIN_TYPEHASH,
+                keccak256("litexlayer2"),
+                keccak256("1"),
+                _chainID,
+                address(this))
+        );
     }
 
     /**
@@ -243,8 +262,8 @@ contract OnchainPayment {
             require(msg.value > 0, "invalid deposit");
             channel.deposit += msg.value;
             emit UserNewDeposit (
-                channelID,
                 msg.sender,
+                channelID,
                 msg.value,
                 channel.deposit
             );
@@ -253,8 +272,8 @@ contract OnchainPayment {
             ERC20(channel.token).safeTransferFrom(msg.sender, address(this), amount);
             channel.deposit += amount;
             emit UserNewDeposit (
+                channel.user,
                 channelID,
-                msg.sender,
                 amount,
                 channel.deposit
             );
@@ -324,8 +343,8 @@ contract OnchainPayment {
         }
 
         emit UserWithdraw (
-            channelID,
             msg.sender,
+            channelID,
             amount,
             withdraw,
             lastCommitBlock
@@ -440,8 +459,9 @@ contract OnchainPayment {
             providerBalance[channel.token] += int256(channel.deposit - payout);
         }
 
-        delete channels[channelID];
         delete channelCounter[channel.user][channel.token];
+        delete channels[channelID];
+       
 
         if (channel.token == address(0)) {
             address(channel.user).transfer(balance);
@@ -450,8 +470,8 @@ contract OnchainPayment {
         }
 
         emit CooperativeSettled (
-            channelID, 
             channel.user,
+            channelID,
             channel.token, 
             balance,
             lastCommitBlock
@@ -471,13 +491,15 @@ contract OnchainPayment {
     )
         public
     {
-        handleBalanceProof (
-            channelID,
-            balance,
-            nonce,
-            additionalHash,
-            partnerSignature
-        );
+        if(nonce > 0) {
+            handleBalanceProof (
+                channelID,
+                balance,
+                nonce,
+                additionalHash,
+                partnerSignature
+            );
+        }
 
         updateRebalanceProof (
             channelID,
@@ -633,9 +655,9 @@ contract OnchainPayment {
         }
 
         emit ChannelSettled (
-            channelID,
             channel.user,
             channel.token,
+            channelID,
             userTransferredAmount,
             providerTransferredAmount
         );
@@ -682,8 +704,8 @@ contract OnchainPayment {
     );
 
     event UserNewDeposit (
-        bytes32 indexed channelID,
         address indexed user,
+        bytes32 indexed channelID,
         uint256 newDeposit,
         uint256 totalDeposit
     );
@@ -695,8 +717,8 @@ contract OnchainPayment {
     );
 
     event UserWithdraw (
-        bytes32 indexed channelID,
         address indexed user,
+        bytes32 indexed channelID,
         uint256 amount,
         uint256 totalWithdraw,
         uint256 lastCommitBlock
@@ -717,8 +739,8 @@ contract OnchainPayment {
     );
 
     event CooperativeSettled (
-        bytes32 indexed channelID,
         address indexed user, 
+        bytes32 indexed channelID,
         address token,
         uint256 balance,
         uint256 lastCommitBlock
@@ -747,9 +769,9 @@ contract OnchainPayment {
     );
 
     event ChannelSettled(
-        bytes32 indexed channelID,
         address indexed user,
         address indexed token,
+        bytes32 indexed channelID,
         uint256 transferTouserAmount,
         uint256 transferToProviderAmount
     );
@@ -757,6 +779,38 @@ contract OnchainPayment {
     /**
         Internal Methods
      */
+
+        /**
+     * @dev Calculate typed hash of given data (compare eth_signTypedData).
+     * @return Hash of given data.
+     */
+
+    function transferHash(
+        bytes32 channelID,
+        uint256 balance,
+        uint256 nonce,
+        bytes32 additionalHash
+    )
+        private
+        view
+        returns(bytes32)
+    {
+        bytes32 hash = keccak256(
+            abi.encode(
+                TRANSFER_TYPEHASH,
+                channelID,
+                balance,
+                nonce,
+                additionalHash)
+        );
+
+        return keccak256(
+            abi.encodePacked(
+            "\x19\x01",
+            DOMAIN_SEPERATOR,
+            hash)
+        );
+    }
 
     function handleBalanceProof (
         bytes32 channelID,
@@ -810,14 +864,20 @@ contract OnchainPayment {
         view
         returns (address)
     {
-        bytes32 messageHash = keccak256(
-            abi.encodePacked(
-                address(this),
-                channelID,
-                balance,
-                nonce,
-                additionalHash
-            )
+        // bytes32 messageHash = keccak256(
+        //     abi.encodePacked(
+        //         address(this),
+        //         channelID,
+        //         balance,
+        //         nonce,
+        //         additionalHash
+        //     )
+        // );
+        bytes32 messageHash = transferHash(
+            channelID,
+            balance,
+            nonce,
+            additionalHash
         );
         return ECDSA.recover(messageHash, signature);
     }

@@ -10,7 +10,7 @@ const providerPK = Buffer.from('6A22D7D5D87EFC4A1375203B7E54FBCF35FAA84975891C5E
 const regulator = '0x4Aa670bCe722B9698A670afc968b1dE5f1553df9';
 const regulatorPK = Buffer.from('DDC1738AC05989633A43A49FB8B9FBE77970CCA9F85921768C2BD8FABBFB2E55', 'hex');
 
-const contract = '0x3231d5D58325B1a53d4D8a3c11501078e1b6f307';
+const contract = '0x224D32fB0A315ACDE49A6eaDD383977746B59107';
 
 async function openChannel(user, puppet, window, token, amount) {
     let data = web3.eth.abi.encodeFunctionCall({ "constant": false, "inputs": [ { "name": "user", "type": "address" }, { "name": "puppet", "type": "address" }, { "name": "settleWindow", "type": "uint256" }, { "name": "token", "type": "address" }, { "name": "amount", "type": "uint256" } ], "name": "openChannel", "outputs": [], "payable": true, "stateMutability": "payable", "type": "function" }, [user, puppet, window, token, amount]);
@@ -23,7 +23,7 @@ async function openChannel(user, puppet, window, token, amount) {
     }
 }
 
-const channelID = '0x7a051472e6c99537d7e8f3dd9a853685d265f9d31cb5c03eb81101f29dd96795';
+const channelID = '0x195f254b59775e83809e15207f6b16b69df22e405434078f31224c51fccdea66';
 
 async function providerDeposit(token, amount) {
     let data = web3.eth.abi.encodeFunctionCall({ "constant": false, "inputs": [ { "name": "token", "type": "address" }, { "name": "amount", "type": "uint256" } ], "name": "providerDeposit", "outputs": [], "payable": true, "stateMutability": "payable", "type": "function" }, [token, amount]);
@@ -80,7 +80,7 @@ async function cooperativeSettle (channelID, balance, lastCommitBlock) {
     }
 }
 
-// openChannel(user, user, 5, '0x0000000000000000000000000000000000000000', 0);
+openChannel(user, user, 5, '0x0000000000000000000000000000000000000000', 0);
 
 // providerDeposit('0x0000000000000000000000000000000000000000', 0);
 
@@ -88,7 +88,7 @@ async function cooperativeSettle (channelID, balance, lastCommitBlock) {
 
 // providerWithdraw('0x0000000000000000000000000000000000000000', web3.utils.toWei('0.09'), 99999999);
 
-cooperativeSettle(channelID, web3.utils.toWei('0.04'), 9999999);
+// cooperativeSettle(channelID, web3.utils.toWei('0.04'), 9999999);
 
 
 

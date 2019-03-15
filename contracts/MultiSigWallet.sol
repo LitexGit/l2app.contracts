@@ -170,11 +170,7 @@ contract MultiSigWallet {
         emit RequirementChange(_required);
     }
 
-    /// @dev Allows an owner to submit and confirm a transaction.
-    /// @param destination Transaction target address.
-    /// @param value Transaction ether value.
-    /// @param data Transaction data payload.
-    /// @return Returns transaction ID.
+
     function submitTransaction(bytes32 txHash, uint256 ethBlockNumber, address destination, uint value, bytes memory data)
         public
         returns (uint transactionId)

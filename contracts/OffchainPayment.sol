@@ -267,6 +267,15 @@ contract OffchainPayment {
             userBalanceProof.nonce = nonce;
             userBalanceProof.additionalHash = additionalHash;
             userBalanceProof.signature = signature;
+            emit Transfer (
+                provider,
+                to,
+                channelID,
+                balance,
+                transferAmount,
+                nonce,
+                additionalHash
+            );
         } else {
             BalanceProof storage balanceProof = balanceProofMap[channelID][provider];
             require(balanceProof.balance < balance, "invalid balance");
@@ -284,16 +293,16 @@ contract OffchainPayment {
             } else {
                 arrearBalanceProofMap[channelID] = BalanceProof(channelID, balance, nonce, additionalHash, signature, new bytes(32));
             }
+            emit Transfer (
+                channel.user,
+                to,
+                channelID,
+                balance,
+                transferAmount,
+                nonce,
+                additionalHash
+            );
         }
-        emit Transfer (
-            msg.sender,
-            to,
-            channelID,
-            balance,
-            transferAmount,
-            nonce,
-            additionalHash
-        );
     }
 
     function guardBalanceProof (

@@ -159,7 +159,6 @@ contract('OffchainPayment', (accounts) => {
     { from: regulatorAddress}
     );
 
-    // await this.offchainPayment.onchainProviderDeposit(tokenAddress, amount, { from: regulatorAddress});
 
     let balance = 1;
     let nonce = 8;
@@ -170,16 +169,7 @@ contract('OffchainPayment', (accounts) => {
 
     console.log(typedData.message);
 
-    // let transfer_typeHash = web3.utils.soliditySha3("Transfer(bytes32 channelID,uint256 balance,uint256 nonce,bytes32 additionalHash)");
-    // let domain_typeHash = web3.utils.soliditySha3("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
-    // let domain_seperator = web3.utils.soliditySha3(domain_typeHash, web3.utils.soliditySha3("litexlayer2"), web3.utils.soliditySha3("1"), 1, providerAddress);
-    // let bashHash = web3.utils.soliditySha3(transfer_typeHash, channelID, balance, nonce, additionalHash);
-    // let messageHash = web3.utils.soliditySha3("\x19\x01", domain_seperator, bashHash);
-
-    // let messageHash = web3.utils.soliditySha3(providerAddress, channelID, balance, nonce, additionalHash);
-
     let signature = myEcsign(signHash(), userPrivateKey)
-
 
     // let signature = myEcsign(messageHash, userPrivateKey);
     await this.offchainPayment.transfer(providerAddress, channelID, balance, nonce, additionalHash, signature, {from: userAddress});

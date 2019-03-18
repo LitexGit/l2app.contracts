@@ -1,7 +1,7 @@
 const Web3 = require('web3');
 //Factory.json file contains my compiled Factory.sol file
-const OnchainPayment = require('./build/contracts/OnchainPayment.json');
-const constructArgs = ['0x4Aa670bCe722B9698A670afc968b1dE5f1553df9', '0xa08105d7650Fe007978a291CcFECbB321fC21ffe', 1, 9, 4];
+const OnchainPayment = require('./build/contracts/LiteXToken.json');
+const constructArgs = [];
 
 
 var Tx = require('ethereumjs-tx');
@@ -15,14 +15,14 @@ web3.eth.accounts.wallet.add(account) // add account to cita
 
 
 const deploy = async () => {
-    //console.log("start deploy");
+    console.log("start deploy");
     let address = web3.eth.accounts.wallet[0].address;
 
     let balance = await web3.eth.getBalance(address);
-    //console.log("balance is ", balance);
+    console.log("balance is ", balance);
 
 
-    //console.log('Attempting to deploy from account: ', address);
+    console.log('Attempting to deploy from account: ', address);
     const MyContract = new web3.eth.Contract(OnchainPayment.abi);
     // console.log("MyContract is ", MyContract);
 
@@ -52,24 +52,23 @@ async function executeTransaction(bytecodeWithParam, nonce){
       };
 
 
-      var privKey = Buffer.from(privateKey.substr(2), 'hex');
+      var privKey = new Buffer(privateKey.substr(2), 'hex');
       var tx = new Tx(rawTransaction);
       tx.sign(privKey);
 
       var serializedTx = tx.serialize();
 
-      // web3.eth.sendSignedTransaction('0x' + serializedTx.toString('hex'), function(err, hash) {
-      //   if (!err){
+      web3.eth.sendSignedTransaction('0x' + serializedTx.toString('hex'), function(err, hash) {
+        if (!err){
 
-      //       //console.log("jj", hash); // "0x7f9fade1c0d57a7af66ab4ead79fade1c0d57a7af66ab4ead7c2c2eb7b11a91385"
+            console.log(hash); // "0x7f9fade1c0d57a7af66ab4ead79fade1c0d57a7af66ab4ead7c2c2eb7b11a91385"
 
-      //   }else{
-      //       //console.log('error', err);
-      //   }
-      // });
-      web3.eth.sendSignedTransaction('0x' + serializedTx.toString('hex')).on('receipt', function(receipt){console.log(receipt.contractAddress)});
+        }else{
+            console.log('error', err);
+        }
+      });
 }
 
 
-//console.log("start");
+console.log("start");
 deploy();

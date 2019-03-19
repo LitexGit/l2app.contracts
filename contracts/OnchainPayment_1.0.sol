@@ -55,8 +55,6 @@ contract OnchainPayment {
         // rebalance data
         uint256 inAmount;
         uint256 inNonce;
-        // uint256 outAmount;
-        // uint256 outNonce;
     }
 
     uint256 public settleWindowMin;
@@ -491,15 +489,13 @@ contract OnchainPayment {
     )
         public
     {
-        if(nonce > 0) {
-            handleBalanceProof (
-                channelID,
-                balance,
-                nonce,
-                additionalHash,
-                partnerSignature
-            );
-        }
+        handleBalanceProof (
+            channelID,
+            balance,
+            nonce,
+            additionalHash,
+            partnerSignature
+        );
 
         updateRebalanceProof (
             channelID,
@@ -629,19 +625,16 @@ contract OnchainPayment {
         );
 
         if (min == channel.userBalance) {
-            require(channel.inAmount >= margin, "provider not sufficient funds");
-            providerTransferredAmount = channel.inAmount - margin;
+            // require(channel.inAmount >= margin, "provider not sufficient funds");
+            providerTransferredAmount = safeSub(channel.inAmount, margin);
 
-            require(safeAdd(channel.deposit, margin) >= channel.withdraw, "user not sufficient funds");
-            userTransferredAmount = safeAdd(channel.deposit, margin) - channel.withdraw;
+            // require(safeAdd(channel.deposit, margin) >= channel.withdraw, "user not sufficient funds");
+            userTransferredAmount = safeSub(safeAdd(channel.deposit, margin), channel.withdraw);
         } else {
-            require(channel.deposit >= safeAdd(channel.withdraw, margin), "user not sufficient funds");
-            userTransferredAmount = channel.deposit - safeAdd(channel.withdraw, margin);
+            // require(channel.deposit >= safeAdd(channel.withdraw, margin), "user not sufficient funds");
+            userTransferredAmount = safeSub(channel.deposit, safeAdd(channel.withdraw, margin));
             providerTransferredAmount = safeAdd(channel.inAmount, margin);
         }
-
-        delete channels[channelID];
-        delete channelCounter[channel.user][channel.token];
 
         if (userTransferredAmount > 0) {
             if (channel.token == address(0x0)) {
@@ -653,7 +646,6 @@ contract OnchainPayment {
         if (providerTransferredAmount > 0) {
             providerBalance[channel.token] += int256(providerTransferredAmount);
         }
-
         emit ChannelSettled (
             channel.user,
             channel.token,
@@ -661,6 +653,8 @@ contract OnchainPayment {
             userTransferredAmount,
             providerTransferredAmount
         );
+        delete channelCounter[channel.user][channel.token];
+        delete channels[channelID];
     }
 
     function getChannelID (
@@ -823,6 +817,15 @@ contract OnchainPayment {
     {
         Channel storage channel = channels[channelID];
         require(channel.status == 1, "channel should be open");
+        channel.status = 2;
+        channel.settleBlock += uint256(block.number);
+
+        if (nonce == 0 && balance == 0) {
+            if (msg.sender == channel.user) {
+                channel.isCloser = true;
+            }
+            return;
+        }
 
         address recoveredPartner = recoverBalanceSignature (
             channelID,
@@ -848,9 +851,6 @@ contract OnchainPayment {
         } else {
             revert("invalid partner signature");
         }
-
-        channel.status = 2;
-        channel.settleBlock += uint256(block.number);
     }
 
     function recoverBalanceSignature (
@@ -917,6 +917,17 @@ contract OnchainPayment {
         returns (uint256, uint256)
     {
         return a > b ? (a - b, b) : (b - a, a);
+    }
+
+    function safeSub(
+        uint256 a,
+        uint256 b
+    )
+        internal
+        pure
+        returns (uint256)
+    {
+        return a > b ? a - b : 0;
     }
 
     function safeAdd(

@@ -44,7 +44,7 @@ async function executeTransaction(bytecodeWithParam, nonce){
         "from": account.address,
         "nonce": "0x" + nonce.toString(16),
         "gasPrice": web3.utils.toHex(50 * 1e9),
-        "gasLimit": web3.utils.toHex(7000000),
+        "gasLimit": web3.utils.toHex(6666666),
         // "to": contractAddress,
         // "value": "0x0",
         "data": bytecodeWithParam,

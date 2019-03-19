@@ -8,7 +8,8 @@ const {
 } = require('./build/contracts/OffchainPayment.json')
 // } = require('./cita_compiled.js');
 
-let constructArgs = ['0x224D32fB0A315ACDE49A6eaDD383977746B59107', '0xa08105d7650Fe007978a291CcFECbB321fC21ffe', '0x4Aa670bCe722B9698A670afc968b1dE5f1553df9', '0xf6486AB66Fa7e3af90098cBD9cd6342E422A1c3F'];
+let constructArgs = [process.argv[2], '0xa08105d7650Fe007978a291CcFECbB321fC21ffe', '0x4Aa670bCe722B9698A670afc968b1dE5f1553df9', process.argv[3],
+4];
 
 let config = {
   // chain: 'https://node.cryptape.com',
@@ -71,12 +72,13 @@ cita.base
       errorMessage
     } = res
     if (errorMessage) throw new Error(errorMessage)
-    console.log(`contractAddress is: ${contractAddress}`)
+    //console.log(`contractAddress is: ${contractAddress}`)
+    console.log(contractAddress);
     _contractAddress = contractAddress
     return cita.base.storeAbi(contractAddress, abi, transaction) // store abi on the chain
   })
   .then(res => {
     if (res.errorMessage) throw new Error(res.errorMessage)
-    return cita.base.getAbi(_contractAddress, 'pending').then(console.log) // get abi from the chain
+    return cita.base.getAbi(_contractAddress, 'pending')//.then(console.log) // get abi from the chain
   })
   .catch(err => console.error(err))

@@ -71,13 +71,14 @@ const {
         errorMessage
       } = res
       if (errorMessage) throw new Error(errorMessage)
-      console.log(`contractAddress is: ${contractAddress}`)
+      //console.log(`contractAddress is: ${contractAddress}`)
+      console.log(contractAddress);
       _contractAddress = contractAddress
       return cita.base.storeAbi(contractAddress, abi, transaction) // store abi on the chain
     })
     .then(res => {
       if (res.errorMessage) throw new Error(res.errorMessage)
-      return cita.base.getAbi(_contractAddress, 'pending').then(console.log) // get abi from the chain
+      return cita.base.getAbi(_contractAddress, 'pending')//.then(console.log) // get abi from the chain
     })
     .catch(err => console.error(err))
   

@@ -799,6 +799,7 @@ contract OffchainPayment {
 
         PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
         paymentNetwork.userTotalWithdraw = paymentNetwork.userTotalWithdraw + amount;
+        channel.userWithdraw += amount;
 
 
     }
@@ -1195,7 +1196,7 @@ contract OffchainPayment {
         address confirmer,
         uint256 balance,
         uint256 lastCommitBlock,
-        bool isAllConfirmed       
+        bool isAllConfirmed
     );
 
     event ProposeRebalance (

@@ -1,6 +1,10 @@
 pragma solidity >=0.4.24 <0.6.0;
 pragma experimental ABIEncoderV2;
 
+contract OCPInterface {
+    function transfer (address to, bytes32 channelID, uint256 balance, uint256 nonce, bytes32 additionalHash, bytes memory signature) public;
+}
+
 contract Session {
     /**
      *  States
@@ -91,7 +95,6 @@ contract Session {
     {
         require(sessions[sessionID].status == 1);
         address[] storage _players = players[sessionID];
-        // todo check if player exists
         uint256 idx = 0;
         while(idx < _players.length){
             if(_players[idx] == user){
@@ -122,6 +125,8 @@ contract Session {
         public
     {
         require(sessions[sessionID].status == 1);
+        // todo
+        OCPInterface(sessions[sessionID].paymentContract).transfer(to, channelID, balance, nonce, additionalHash, paymentSignature);
         Message[] storage message = messages[sessionID];
         message.push(Message(from, to, sessionID, mType, content, signature, channelID, balance, nonce, additionalHash, paymentSignature));
         emit SendMessage(from, to, sessionID, mType, content, signature, channelID, balance, nonce, additionalHash, paymentSignature);

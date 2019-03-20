@@ -236,15 +236,6 @@ contract OffchainPayment {
     {
         Channel storage channel = channelMap[channelID];
         require(channel.status == 1, "channel should be open");
-        // bytes32 messageHash = keccak256(
-        //     abi.encodePacked(
-        //         onchainPayment,
-        //         channelID,
-        //         balance,
-        //         nonce,
-        //         additionalHash
-        //     )
-        // );
         bytes32 messageHash = transferHash(
             channelID,
             balance,
@@ -254,12 +245,12 @@ contract OffchainPayment {
         address recoveredSignature = ECDSA.recover(messageHash, signature);
         // address recoveredSignature = recover(messageHash, signature);
         uint256 transferAmount;
-        if (msg.sender == provider) {
+        if (recoveredSignature == provider) {
             BalanceProof storage userBalanceProof = balanceProofMap[channelID][to];
             require(userBalanceProof.balance < balance, "invalid balance");
             require(userBalanceProof.nonce < nonce, "invalid nonce");
             require(balance - userBalanceProof.balance <= channel.providerBalance, "provider insufficient funds");
-            require(recoveredSignature == provider, "invalid signature");
+            // require(recoveredSignature == provider, "invalid signature");
             transferAmount = balance - userBalanceProof.balance;
             channel.providerBalance -= balance - userBalanceProof.balance;
             channel.userBalance += balance - userBalanceProof.balance;
@@ -276,12 +267,12 @@ contract OffchainPayment {
                 nonce,
                 additionalHash
             );
-        } else {
+        } else if (recoveredSignature == channel.user) {
             BalanceProof storage balanceProof = balanceProofMap[channelID][provider];
             require(balanceProof.balance < balance, "invalid balance");
             require(balanceProof.nonce < nonce, "invalid nonce");
             require(balance - balanceProof.balance <= channel.userBalance, "user insufficient funds");
-            require(recoveredSignature == channel.user, "invalid signature");
+            // require(recoveredSignature == channel.user, "invalid signature");
             transferAmount = balance - balanceProof.balance;
             if (feeRateMap[channel.token] == 0) {
                 channel.providerBalance += balance - balanceProof.balance;
@@ -302,6 +293,8 @@ contract OffchainPayment {
                 nonce,
                 additionalHash
             );
+        } else {
+            revert("invalid signature");
         }
     }
 

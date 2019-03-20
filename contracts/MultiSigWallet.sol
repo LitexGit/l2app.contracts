@@ -248,7 +248,14 @@ contract MultiSigWallet {
                 return true;
         }
     }
-
+    
+    function setEthBlockNumber(uint256 _ethBlockNumber) 
+        public
+        onlyWallet
+    {
+        ethBlockNumber = _ethBlockNumber;
+    }
+    
     function getEthBlockNumber()
         external
         view

@@ -125,8 +125,9 @@ contract Session {
         public
     {
         require(sessions[sessionID].status == 1);
-        // todo
-        OCPInterface(sessions[sessionID].paymentContract).transfer(to, channelID, balance, nonce, additionalHash, paymentSignature);
+        if (balance != 0 && nonce !=0) {
+            OCPInterface(sessions[sessionID].paymentContract).transfer(to, channelID, balance, nonce, additionalHash, paymentSignature);
+        }
         Message[] storage message = messages[sessionID];
         message.push(Message(from, to, sessionID, mType, content, signature, channelID, balance, nonce, additionalHash, paymentSignature));
         emit SendMessage(from, to, sessionID, mType, content, signature, channelID, balance, nonce, additionalHash, paymentSignature);

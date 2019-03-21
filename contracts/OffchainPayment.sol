@@ -221,6 +221,7 @@ contract OffchainPayment {
         public
     {
         require(msg.sender == operator, "invalid sender");
+        require(rate < 10000);
         feeRateMap[token] = rate;
     }
 
@@ -1010,6 +1011,7 @@ contract OffchainPayment {
         uint256 ethBlockNumber =  MultiSignInterface(operator).getEthBlockNumber();
         require(cooperativeSettleProofMap[channelID].lastCommitBlock < ethBlockNumber, "invalid block number");
         channelMap[channelID].status = 1;
+        delete cooperativeSettleProofMap[channelID];
     }
 
     function isPuppet(

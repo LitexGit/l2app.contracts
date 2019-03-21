@@ -455,11 +455,7 @@ contract OnchainPayment {
             providerBalance[channel.token] -= int256(payout - channel.deposit);
         } else {
             providerBalance[channel.token] += int256(channel.deposit - payout);
-        }
-
-        delete channelCounter[channel.user][channel.token];
-        delete channels[channelID];
-       
+        }      
 
         if (channel.token == address(0)) {
             address(channel.user).transfer(balance);
@@ -474,6 +470,9 @@ contract OnchainPayment {
             balance,
             lastCommitBlock
         );
+
+        delete channelCounter[channel.user][channel.token];
+        delete channels[channelID];
     }
 
     function closeChannel (

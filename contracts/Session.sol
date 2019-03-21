@@ -3,6 +3,11 @@ pragma experimental ABIEncoderV2;
 
 contract OCPInterface {
     function transfer (address to, bytes32 channelID, uint256 balance, uint256 nonce, bytes32 additionalHash, bytes memory signature) public;
+    mapping (address => Puppet[]) public puppets;
+    struct Puppet {
+        address p;
+        bool enabled;
+    }
 }
 
 contract Session {
@@ -44,7 +49,7 @@ contract Session {
     }
 
     // game => counter
-    mapping (address => uint256) public counter;
+    // mapping (address => uint256) public counter;
 
     /**
      *  Constructor
@@ -56,17 +61,18 @@ contract Session {
      *  Public Functions
      */
 
-    function getSessionID(
-        address game,
-        uint256 counter
-    )
-        public
-        returns(bytes32)
-    {
-        return keccak256(abi.encodePacked(game, counter));
-    }
+    // function getSessionID(
+    //     address game,
+    //     uint256 counter
+    // )
+    //     public
+    //     returns(bytes32)
+    // {
+    //     return keccak256(abi.encodePacked(game, counter));
+    // }
     
     function initSession(
+        bytes32 sessionID,
         address provider,
         address game,
         address[] memory _players,
@@ -75,8 +81,10 @@ contract Session {
     )
         public
     {
-        counter[game]++;
-        bytes32 sessionID = getSessionID(game, counter[game]);
+        require(msg.sender == provider);
+        // counter[game]++;
+        //bytes32 sessionID = getSessionID(game, counter[game]);
+        require(sessions[sessionID].status == 0);
         sessions[sessionID] = Session(1, provider, game, paymentContract, data);
         players[sessionID] = _players;
         emit InitSession(
@@ -94,6 +102,7 @@ contract Session {
         public
     {
         require(sessions[sessionID].status == 1);
+        require(sessions[sessionID].provider == msg.sender);
         address[] storage _players = players[sessionID];
         uint256 idx = 0;
         while(idx < _players.length){
@@ -125,7 +134,19 @@ contract Session {
         public
     {
         require(sessions[sessionID].status == 1);
+        if (from == sessions[sessionID].provider) {
+            require(msg.sender == from);
+        } 
         if (balance != 0 && nonce !=0) {
+            bytes32 mHash = keccak256(
+                abi.encodePacked(
+                    from,
+                    to,
+                    sessionID,
+                    mType,
+                    content
+            ));
+            require(additionalHash == mHash);
             OCPInterface(sessions[sessionID].paymentContract).transfer(to, channelID, balance, nonce, additionalHash, paymentSignature);
         }
         Message[] storage message = messages[sessionID];
@@ -140,6 +161,7 @@ contract Session {
     {
         Session storage session = sessions[sessionID];
         require(session.status == 1);
+        require(msg.sender == session.provider);
         session.status = 2;
         emit CloseSession(
             sessionID

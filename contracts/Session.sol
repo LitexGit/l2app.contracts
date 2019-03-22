@@ -181,26 +181,35 @@ contract Session {
         return messages[sessionID];
     }
 
+    function exportPlayer(
+        bytes32 sessionID
+    )
+        external
+        returns(address[] memory)
+    {
+        return players[sessionID];
+    }
+
     /**
      * Events
      */
     
     event InitSession(
-        address provider,
-        address game,
+        address indexed provider,
+        address indexed game,
         address[] _players,
         bytes32 sessionID
     );
 
     event JoinSession(
-        bytes32 sessionID,
-        address user
+        bytes32 indexed sessionID,
+        address indexed user
     );
 
     event SendMessage(
-        address from,
-        address to,
-        bytes32 sessionID,
+        address indexed from,
+        address indexed to,
+        bytes32 indexed sessionID,
         string mType,
         bytes content,
         bytes signature,
@@ -212,6 +221,6 @@ contract Session {
     );
 
     event CloseSession(
-        bytes32 sessionID
+        bytes32 indexed sessionID
     );
 }

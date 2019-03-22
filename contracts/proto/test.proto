@@ -1,0 +1,14 @@
+syntax = "proto3";
+// package name is used for both generated .sol file name and library name
+package mytest;
+
+import "google/protobuf/descriptor.proto";
+extend google.protobuf.FieldOptions {
+    string soltype = 8888;  // must > 1001 and not conflict with other extensions
+}
+
+message MyMsg {
+    bytes addr = 1 [ (soltype) = "address" ];
+    uint32 num = 2 [ (soltype) = "uint8" ];
+    bool has_moon = 3;  // for matching native types, no need for soltype option
+}

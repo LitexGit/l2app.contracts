@@ -67,23 +67,37 @@ contract('OnchainPayment', (accounts) => {
   // });
 
 
-  it("token close and settle channel should success", async()=>{
+  // it("token close and settle channel should success", async()=>{
+  //   await this.Token.approve(this.OnchainPayment.address, 888, {from: userAddress});
+
+  //   let res = await this.OnchainPayment.openChannel(userAddress, userAddress, 1, this.Token.address, 88, {from: userAddress});
+  //   let channelID = res.receipt.logs[0].args[6];
+  //   console.log(channelID, this.OnchainPayment.address);
+
+  //   res = await this.OnchainPayment.closeChannel(channelID, 0, 0, "0x0", "0x0", 0, 0, "0x0", "0x0", {from: userAddress});
+  //   console.log(res.receipt.logs[0])
+
+  //   let channelData = await this.OnchainPayment.channels.call(channelID);
+  //   console.log("channel data:", channelData);
+
+  //   await OnchainPayment.new(regulatorAddress, providerAddress, 1, 9, 1, {from: providerAddress});
+
+  //   res = await this.OnchainPayment.settleChannel(channelID);
+
+  // });
+
+  it("token co settle channel should success", async()=>{
     await this.Token.approve(this.OnchainPayment.address, 888, {from: userAddress});
 
     let res = await this.OnchainPayment.openChannel(userAddress, userAddress, 1, this.Token.address, 88, {from: userAddress});
     let channelID = res.receipt.logs[0].args[6];
-    console.log(channelID, this.OnchainPayment.address);
+    //console.log(channelID, this.OnchainPayment.address);
 
-    res = await this.OnchainPayment.closeChannel(channelID, 0, 0, "0x0", "0x0", 0, 0, "0x0", "0x0", {from: userAddress});
-    console.log(res.receipt.logs[0])
-
-    let channelData = await this.OnchainPayment.channels.call(channelID);
-    console.log("channel data:", channelData);
-
-    await OnchainPayment.new(regulatorAddress, providerAddress, 1, 9, 1, {from: providerAddress});
-
-    res = await this.OnchainPayment.settleChannel(channelID);
-
+    let messageHash = web3.utils.soliditySha3(this.OnchainPayment.address, channelID, 8, 888);
+    let providerSig = myEcsign(messageHash, providerPrivateKey);
+    let regulatorSig = myEcsign(messageHash, regulatorPrivateKey);
+    res = await this.OnchainPayment.cooperativeSettle(channelID, 8, 888, providerSig, regulatorSig, {from: userAddress});
+    console.log(res);
   });
 
 });

@@ -1,13 +1,11 @@
 pragma solidity >=0.4.24 <0.6.0;
 pragma experimental ABIEncoderV2;
 
+import "./lib/ECDSA.sol";
+
 contract OCPInterface {
     function transfer (address to, bytes32 channelID, uint256 balance, uint256 nonce, bytes32 additionalHash, bytes memory signature) public;
-    mapping (address => Puppet[]) public puppets;
-    struct Puppet {
-        address p;
-        bool enabled;
-    }
+    function isPuppet (address user, address puppet) public returns(bool);
 }
 
 contract Session {
@@ -44,6 +42,7 @@ contract Session {
         uint256 balance;
         uint256 nonce;
         // hash of data related to transfer
+        uint256 amount;
         bytes32 additionalHash;
         bytes paymentSignature;
     }
@@ -128,6 +127,7 @@ contract Session {
         bytes32 channelID,
         uint256 balance,
         uint256 nonce,
+        uint256 amount,
         bytes32 additionalHash,
         bytes memory paymentSignature
     )
@@ -136,22 +136,29 @@ contract Session {
         require(sessions[sessionID].status == 1);
         if (from == sessions[sessionID].provider) {
             require(msg.sender == from);
-        } 
+        }
+        bytes32 mHash = keccak256(
+            abi.encodePacked(
+                from,
+                to,
+                sessionID,
+                mType,
+                content
+        )); 
+        require(OCPInterface(sessions[sessionID].paymentContract).isPuppet(from, ECDSA.recover(mHash, signature)), "invalid puppet signature");
         if (balance != 0 && nonce !=0) {
-            bytes32 mHash = keccak256(
+            mHash = keccak256(
                 abi.encodePacked(
-                    from,
-                    to,
-                    sessionID,
-                    mType,
-                    content
-            ));
+                    mHash,
+                    amount
+                )
+            );
             require(additionalHash == mHash);
             OCPInterface(sessions[sessionID].paymentContract).transfer(to, channelID, balance, nonce, additionalHash, paymentSignature);
         }
         Message[] storage message = messages[sessionID];
-        message.push(Message(from, to, sessionID, mType, content, signature, channelID, balance, nonce, additionalHash, paymentSignature));
-        emit SendMessage(from, to, sessionID, mType, content, signature, channelID, balance, nonce, additionalHash, paymentSignature);
+        message.push(Message(from, to, sessionID, mType, content, signature, channelID, balance, nonce, amount, additionalHash, paymentSignature));
+        emit SendMessage(from, to, sessionID, mType, content, signature, channelID, balance, nonce, amount, additionalHash, paymentSignature);
     }
 
     function closeSession(
@@ -216,6 +223,7 @@ contract Session {
         bytes32 channelID,
         uint256 balance,
         uint256 nonce,
+        uint256 amount,
         bytes32 additionalHash,
         bytes paymentSignature
     );

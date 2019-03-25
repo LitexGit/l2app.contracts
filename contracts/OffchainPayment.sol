@@ -1107,6 +1107,15 @@ contract OffchainPayment {
     //     return addressRecover;
     // }
 
+    // function verifyPuppet(
+    //     address user,
+    //     address puppet
+    // )
+    //     public
+    //     returns(bool)
+    // {
+
+    // }
 
 
     // }

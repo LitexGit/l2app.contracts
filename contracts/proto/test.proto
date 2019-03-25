@@ -1,14 +1,40 @@
 syntax = "proto3";
 // package name is used for both generated .sol file name and library name
-package mytest;
+package PacketData;
 
 import "google/protobuf/descriptor.proto";
 extend google.protobuf.FieldOptions {
     string soltype = 8888;  // must > 1001 and not conflict with other extensions
 }
 
-message MyMsg {
-    bytes addr = 1 [ (soltype) = "address" ];
-    uint32 num = 2 [ (soltype) = "uint8" ];
-    bool has_moon = 3;  // for matching native types, no need for soltype option
+// message ProviderRandomHash {
+//     bytes prHash = 4 [ (soltype) = "bytes32" ];
+// }
+
+message UserRandomHash {
+    bytes user = 1 [ (soltype) = "address" ];
+    bytes sessionID = 2 [ (soltype) = "bytes32" ];
+    bytes rHash = 3 [ (soltype) = "bytes32" ];
 }
+
+message UserHashReady {
+    bytes sessionID = 1 [ (soltype) = "bytes32" ];
+    bytes user1 = 2 [ (soltype) = "address" ];
+    bytes user2 = 3 [ (soltype) = "address" ];
+    bytes user3 = 4 [ (soltype) = "address" ];
+    bytes user4 = 5 [ (soltype) = "address" ];
+    bytes user5 = 6 [ (soltype) = "address" ];
+}
+
+message UserRevealRandom {
+    bytes sessionID = 1 [ (soltype) = "bytes32" ];
+    bytes user = 2 [ (soltype) = "address" ];
+    bytes random = 3 [ (soltype) = "bytes32" ];
+}
+
+message ProviderSettle {
+    bytes sessionID = 1 [ (soltype) = "bytes32" ];
+    bytes pRandom = 2 [ (soltype) = "bytes32" ];
+}
+
+

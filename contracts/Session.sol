@@ -2,6 +2,7 @@ pragma solidity >=0.4.24 <0.6.0;
 pragma experimental ABIEncoderV2;
 
 import "./lib/ECDSA.sol";
+import "./lib/TransferData.sol";
 
 contract OCPInterface {
     function transfer (address to, bytes32 channelID, uint256 balance, uint256 nonce, bytes32 additionalHash, bytes memory signature) public;
@@ -34,7 +35,7 @@ contract Session {
         address from;
         address to;
         bytes32 sessionID;
-        string mType;
+        bytes32 mType;
         bytes content;
         bytes signature;
         // balance proof
@@ -121,18 +122,15 @@ contract Session {
         address from,
         address to,
         bytes32 sessionID,
-        string memory mType,
+        bytes32 mType,
         bytes memory content,
         bytes memory signature,
-        bytes32 channelID,
-        uint256 balance,
-        uint256 nonce,
-        uint256 amount,
-        bytes32 additionalHash,
-        bytes memory paymentSignature
+        bytes memory protoData
     )
         public
     {
+        TransferData.Transfer memory transferData = TransferData.decTransfer(protoData);
+
         require(sessions[sessionID].status == 1);
         if (from == sessions[sessionID].provider) {
             require(msg.sender == from);
@@ -146,19 +144,19 @@ contract Session {
                 content
         )); 
         require(OCPInterface(sessions[sessionID].paymentContract).isPuppet(from, ECDSA.recover(mHash, signature)), "invalid puppet signature");
-        if (balance != 0 && nonce !=0) {
+        if (transferData.balance != 0 && transferData.nonce !=0) {
             mHash = keccak256(
                 abi.encodePacked(
                     mHash,
-                    amount
+                    transferData.amount
                 )
             );
-            require(additionalHash == mHash);
-            OCPInterface(sessions[sessionID].paymentContract).transfer(to, channelID, balance, nonce, additionalHash, paymentSignature);
+            require(transferData.additionalHash == mHash);
+            OCPInterface(sessions[sessionID].paymentContract).transfer(to, transferData.channelID, transferData.balance, transferData.nonce, transferData.additionalHash, transferData.signature);
         }
         Message[] storage message = messages[sessionID];
-        message.push(Message(from, to, sessionID, mType, content, signature, channelID, balance, nonce, amount, additionalHash, paymentSignature));
-        emit SendMessage(from, to, sessionID, mType, content, signature, channelID, balance, nonce, amount, additionalHash, paymentSignature);
+        message.push(Message(from, to, sessionID, mType, content, signature, transferData.channelID, transferData.balance, transferData.nonce, transferData.amount, transferData.additionalHash, transferData.signature));
+        emit SendMessage(from, to, sessionID, mType, content, signature, transferData.channelID, transferData.balance, transferData.nonce, transferData.amount, transferData.additionalHash, transferData.signature);
     }
 
     function closeSession(
@@ -183,9 +181,10 @@ contract Session {
         bytes32 sessionID
     )
         external
-        returns(Message[] memory)
+        view
+        returns(bytes memory)
     {
-        return messages[sessionID];
+        return abi.encode(messages[sessionID]);
     }
 
     function exportPlayer(
@@ -217,7 +216,7 @@ contract Session {
         address indexed from,
         address indexed to,
         bytes32 indexed sessionID,
-        string mType,
+        bytes32 mType,
         bytes content,
         bytes signature,
         bytes32 channelID,

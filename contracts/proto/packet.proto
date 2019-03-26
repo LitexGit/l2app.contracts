@@ -11,7 +11,7 @@ message ProviderRandomHash {
     bytes prHash = 1 [ (soltype) = "bytes32" ];
     // td
     bytes token = 2 [ (soltype) = "address" ];
-    uint64 amount = 3 [ (soltype) = "uint256" ];
+    bytes amount = 3 [ (soltype) = "uint256" ];
 }
 
 message UserRandomHash {

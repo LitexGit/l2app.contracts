@@ -406,7 +406,7 @@ contract OffchainPayment {
         );
         UserWithdrawProof storage userWithdrawProof = userWithdrawProofMap[channelID];
         require(amount <= channel.userBalance);
-        require(userWithdrawProof.lastCommitBlock < lastCommitBlock);
+        require(userWithdrawProof.lastCommitBlock == 0);
         // userWithdrawProof.channelID = channelID;
         userWithdrawProof.amount = amount + channel.userWithdraw;
         userWithdrawProof.receiver = receiver;
@@ -418,6 +418,7 @@ contract OffchainPayment {
             channel.user,
             channelID,
             amount,
+            userWithdrawProof.amount,
             receiver,
             lastCommitBlock
         );
@@ -465,7 +466,9 @@ contract OffchainPayment {
             signer,
             userWithdrawProof.amount,
             userWithdrawProof.lastCommitBlock,
-            userWithdrawProof.isConfirmed
+            userWithdrawProof.isConfirmed,
+            userWithdrawProof.providerSignature,
+            userWithdrawProof.regulatorSignature
         );
     }
 
@@ -1171,6 +1174,7 @@ contract OffchainPayment {
         address indexed user,
         bytes32 indexed channelID,
         uint256 amount,
+        uint256 balance,
         address receiver,
         uint256 lastCommitBlock
     );
@@ -1181,7 +1185,9 @@ contract OffchainPayment {
         address confirmer,
         uint256 amount,
         uint256 lastCommitBlock,
-        bool isAllConfirmed
+        bool isAllConfirmed,
+        bytes providerSignature,
+        bytes regulatorSignature
     );
 
     event ProviderProposeWithdraw (

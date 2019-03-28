@@ -35,7 +35,7 @@ contract Session {
         address from;
         address to;
         bytes32 sessionID;
-        bytes32 mType;
+        uint8 mType;
         bytes content;
         bytes signature;
         // balance proof
@@ -122,18 +122,18 @@ contract Session {
         address from,
         address to,
         bytes32 sessionID,
-        bytes32 mType,
+        uint8 mType,
         bytes memory content,
         bytes memory signature,
-        bytes memory protoData
+        bytes memory protoData,
+        bytes memory paymentSig
     )
         public
     {
         TransferData.Transfer memory transferData = TransferData.decTransfer(protoData);
-
-        require(sessions[sessionID].status == 1);
+        require(sessions[sessionID].status == 1, "session should be open");
         if (from == sessions[sessionID].provider) {
-            require(msg.sender == from);
+            require(msg.sender == from, "invalid sender");
         }
         bytes32 mHash = keccak256(
             abi.encodePacked(
@@ -144,19 +144,19 @@ contract Session {
                 content
         )); 
         require(OCPInterface(sessions[sessionID].paymentContract).isPuppet(from, ECDSA.recover(mHash, signature)), "invalid puppet signature");
-        if (transferData.balance != 0 && transferData.nonce !=0) {
+        if (transferData.balance != 0 && transferData.nonce != 0 && mType != 0) {
             mHash = keccak256(
                 abi.encodePacked(
                     mHash,
                     transferData.amount
                 )
             );
-            require(transferData.additionalHash == mHash);
-            OCPInterface(sessions[sessionID].paymentContract).transfer(to, transferData.channelID, transferData.balance, transferData.nonce, transferData.additionalHash, transferData.signature);
+            require(transferData.additionalHash == mHash, "invalid additional hash");
+            OCPInterface(sessions[sessionID].paymentContract).transfer(to, transferData.channelID, transferData.balance, transferData.nonce, transferData.additionalHash, paymentSig);
         }
         Message[] storage message = messages[sessionID];
-        message.push(Message(from, to, sessionID, mType, content, signature, transferData.channelID, transferData.balance, transferData.nonce, transferData.amount, transferData.additionalHash, transferData.signature));
-        emit SendMessage(from, to, sessionID, mType, content, signature, transferData.channelID, transferData.balance, transferData.nonce, transferData.amount, transferData.additionalHash, transferData.signature);
+        message.push(Message(from, to, sessionID, mType, content, signature, transferData.channelID, transferData.balance, transferData.nonce, transferData.amount, transferData.additionalHash, paymentSig));
+        emit SendMessage(from, to, sessionID, mType, content, signature, transferData.channelID, transferData.balance, transferData.nonce, transferData.amount, transferData.additionalHash, paymentSig);
     }
 
     function closeSession(
@@ -177,7 +177,7 @@ contract Session {
      * External Functions
      */
 
-    function exportSession(
+    function exportSessionBytes(
         bytes32 sessionID
     )
         external
@@ -185,6 +185,16 @@ contract Session {
         returns(bytes memory)
     {
         return abi.encode(messages[sessionID]);
+    }
+
+    function exportSession(
+        bytes32 sessionID
+    )
+        external
+        view
+        returns(Message[] memory)
+    {
+        return messages[sessionID];
     }
 
     function exportPlayer(
@@ -216,7 +226,7 @@ contract Session {
         address indexed from,
         address indexed to,
         bytes32 indexed sessionID,
-        bytes32 mType,
+        uint8 mType,
         bytes content,
         bytes signature,
         bytes32 channelID,

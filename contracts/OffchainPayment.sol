@@ -1093,6 +1093,7 @@ contract OffchainPayment {
         address puppet
     )
         public
+        view
         returns(bool)
     {
         Puppet[] storage puppetList = puppets[user];

@@ -573,7 +573,10 @@ contract OffchainPayment {
         } else {
             revert();
         }
-        channelMap[channelID].status = 4;
+        if (csProof.isConfirmed) {
+            channelMap[channelID].status = 4;
+        }
+        
         emit ConfirmCooperativeSettle (
             channelMap[channelID].user,
             channelID,
@@ -693,7 +696,12 @@ contract OffchainPayment {
         paymentNetwork.userCount = paymentNetwork.userCount + 1;
         paymentNetwork.userTotalDeposit = paymentNetwork.userTotalDeposit + amount;
 
-
+        emit OnchainOpenChannel (
+            user,
+            token,
+            channelID,
+            amount
+        );
     }
 
     function onchainAddPuppet (
@@ -719,6 +727,10 @@ contract OffchainPayment {
             puppetList.push(Puppet(puppet, true));
         }
 
+        emit OnchainAddPuppet (
+            user,
+            puppet
+        );
     }
 
     function onchainDisablePuppet (
@@ -738,7 +750,10 @@ contract OffchainPayment {
             }
             i += 1;
         }
-
+        emit OnchainDisablePuppet(
+            user,
+            puppet
+        );
     }
 
     function onchainUserDeposit (
@@ -763,6 +778,11 @@ contract OffchainPayment {
         PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
         paymentNetwork.userTotalDeposit = paymentNetwork.userTotalDeposit + deltaDeposit;
 
+        emit OnchainUserDeposit(
+            user,
+            channelID,
+            deposit
+        );
     }
 
 
@@ -782,6 +802,11 @@ contract OffchainPayment {
         paymentNetwork.providerDeposit = paymentNetwork.providerDeposit + amount;
         paymentNetwork.providerBalance = paymentNetwork.providerBalance + amount;
         paymentNetwork.providerOnchainBalance += int256(amount);
+
+        emit OnchainProviderDeposit (
+            token,
+            amount
+        );
     }
 
     function onchainUserWithdraw (
@@ -807,7 +832,12 @@ contract OffchainPayment {
         paymentNetwork.userTotalWithdraw = paymentNetwork.userTotalWithdraw + amount;
         channel.userWithdraw += amount;
 
-
+        emit OnchainUserWithdraw(
+            channelID,
+            amount,
+            withdraw,
+            lastCommitBlock
+        );
     }
 
     function onchainProviderWithdraw (
@@ -824,6 +854,12 @@ contract OffchainPayment {
         /* PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
         paymentNetwork.providerWithdraw = paymentNetwork.providerWithdraw + amount;
         paymentNetwork.providerBalance = paymentNetwork.providerBalance - amount; */
+        emit OnchainProviderWithdraw(
+            token,
+            amount,
+            balance,
+            lastCommitBlock
+        );
     }
 
     function onchainCooperativeSettleChannel(
@@ -850,6 +886,12 @@ contract OffchainPayment {
         paymentNetwork.providerTotalSettled += providerSettleAmount;
         paymentNetwork.providerBalance += providerSettleAmount;
 
+        emit OnchainCooperativeSettleChannel(
+            user,
+            channelID,
+            balance,
+            lastCommitBlock
+        );
     }
 
     function onchainCloseChannel (
@@ -883,6 +925,13 @@ contract OffchainPayment {
         }
         closingData.providerRebalanceInAmount = inAmount;
 
+        emit OnchainCloseChannel (
+            closer,
+            channelID,
+            balance,
+            nonce,
+            inAmount
+        );
     }
 
     function onchainPartnerUpdateProof (
@@ -905,6 +954,13 @@ contract OffchainPayment {
         closingData.userTransferredAmount = userBalance;
         closingData.userTransferredNonce = userNonce;
 
+        emit OnchainPartnerUpdateProof(
+            channelID,
+            userBalance,
+            userNonce,
+            providerBalance,
+            providerNonce
+        );
     }
 
     function onchainRegulatorUpdateProof (
@@ -921,6 +977,10 @@ contract OffchainPayment {
         ClosingChannel storage closingData = closingChannelMap[channelID];
         closingData.providerRebalanceInAmount = inAmount;
 
+        emit OnchainRegulatorUpdateProof (
+            channelID,
+            inAmount
+        );
     }
 
     function onchainSettleChannel (
@@ -949,6 +1009,11 @@ contract OffchainPayment {
         paymentNetwork.providerTotalSettled += providerSettleAmount;
         paymentNetwork.providerBalance += providerSettleAmount;
 
+        emit OnchainSettleChannel(
+            channelID,
+            userSettleAmount,
+            providerSettleAmount
+        );
     }
 
 
@@ -986,7 +1051,9 @@ contract OffchainPayment {
         }else{
             revert();
         }
-
+        emit UnlockUserWithdrawProof(
+            channelID
+        );
     }
 
     // function unlockProviderWithdrawProof(
@@ -1015,6 +1082,10 @@ contract OffchainPayment {
         require(cooperativeSettleProofMap[channelID].lastCommitBlock < ethBlockNumber, "invalid block number");
         channelMap[channelID].status = 1;
         delete cooperativeSettleProofMap[channelID];
+
+        emit UnlockCooperativeSettle(
+            channelID
+        );
     }
 
     function isPuppet(
@@ -1230,5 +1301,89 @@ contract OffchainPayment {
         bytes32 indexed id,
         uint256 amount,
         uint256 nonce
+    );
+
+    event OnchainOpenChannel (
+        address indexed user,
+        address indexed token,
+        bytes32 channelID,
+        uint256 amount
+    );
+
+    event OnchainAddPuppet(
+        address indexed user,
+        address indexed puppet
+    );
+
+    event OnchainDisablePuppet (
+        address indexed user,
+        address indexed puppet
+    );
+
+    event OnchainUserDeposit (
+        address indexed user,
+        bytes32 indexed channelID,
+        uint256 deposit
+    );
+
+    event OnchainProviderDeposit (
+        address indexed token,
+        uint256 amount
+    );
+
+    event OnchainUserWithdraw (
+        bytes32 indexed channelID,
+        uint256 amount,
+        uint256 withdraw,
+        uint256 lastCommitBlock
+    );
+
+    event OnchainProviderWithdraw (
+        address indexed token,
+        uint256 amount,
+        uint256 balance,
+        uint256 lastCommitBlock
+    );
+
+    event OnchainCooperativeSettleChannel(
+        address indexed user,
+        bytes32 channelID,
+        uint256 balance,
+        uint256 lastCommitBlock
+    );
+
+    event OnchainCloseChannel (
+        address indexed closer,
+        bytes32 indexed channelID,
+        uint256 balance,
+        uint256 nonce,
+        uint256 inAmount
+    );
+
+    event OnchainPartnerUpdateProof (
+        bytes32 indexed channelID,
+        uint256 userBalance,
+        uint256 userNonce,
+        uint256 providerBalance,
+        uint256 providerNonce
+    );
+
+    event OnchainRegulatorUpdateProof (
+        bytes32 indexed channelID,
+        uint256 inAmount
+    );
+
+    event OnchainSettleChannel (
+        bytes32 indexed channelID,
+        uint256 userSettleAmount,
+        uint256 providerSettleAmount
+    );
+
+    event UnlockUserWithdrawProof (
+        bytes32 indexed channelID
+    );
+
+    event UnlockCooperativeSettle (
+        bytes32 indexed channelID
     );
 }

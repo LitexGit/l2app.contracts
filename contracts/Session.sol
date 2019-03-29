@@ -130,11 +130,7 @@ contract Session {
     )
         public
     {
-        TransferData.Transfer memory transferData = TransferData.decTransfer(protoData);
         require(sessions[sessionID].status == 1, "session should be open");
-        if (from == sessions[sessionID].provider) {
-            require(msg.sender == from, "invalid sender");
-        }
         bytes32 mHash = keccak256(
             abi.encodePacked(
                 from,
@@ -143,12 +139,20 @@ contract Session {
                 mType,
                 content
         )); 
-        require(OCPInterface(sessions[sessionID].paymentContract).isPuppet(from, ECDSA.recover(mHash, signature)), "invalid puppet signature");
+        if (from == sessions[sessionID].provider) {
+            require(msg.sender == from, "invalid sender");
+        } else {
+            require(isUserExist(sessionID, from), "invalid user");
+            require(OCPInterface(sessions[sessionID].paymentContract).isPuppet(from, ECDSA.recover(mHash, signature)), "invalid puppet signature");
+        }
+        TransferData.Transfer memory transferData;
+        if (protoData.length != 0) transferData = TransferData.decTransfer(protoData);
         if (transferData.balance != 0 && transferData.nonce != 0 && mType != 0) {
+            
             mHash = keccak256(
                 abi.encodePacked(
-                    mHash,
-                    transferData.amount
+                    transferData.amount,
+                    mHash
                 )
             );
             require(transferData.additionalHash == mHash, "invalid additional hash");
@@ -173,10 +177,23 @@ contract Session {
         );
     }
 
+    function isUserExist(
+        bytes32 sessionID,
+        address user
+    )
+        public
+        returns(bool)
+    {
+        address[] memory addrs = players[sessionID];
+        for(uint i=0; i<addrs.length; i++) {
+            if(addrs[i]==user) return true;
+        }
+        return false;
+    }
+
     /**
      * External Functions
      */
-
     function exportSessionBytes(
         bytes32 sessionID
     )

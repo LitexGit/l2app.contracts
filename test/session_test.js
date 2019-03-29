@@ -3,7 +3,6 @@ const BigNumber = web3.BigNumber;
 var OffchainPayment = artifacts.require("OffchainPayment");
 var Session = artifacts.require("Session");
 const abi = require('ethereumjs-abi');
-var transferPB = require('./transfer_pb');
 var protobuf = require("protobufjs");
 protobuf.common('google/protobuf/descriptor.proto', {})
 
@@ -36,8 +35,6 @@ var typedData = {
         additionalHash: ''
     },
   };
-  
-  
   const types = typedData.types;
   function dependencies(primaryType, found = []) {
     if (found.includes(primaryType)) {
@@ -56,7 +53,6 @@ var typedData = {
     }
     return found;
   }
-  
   function encodeType(primaryType) {
     // Get dependencies primary first, then alphabetical
     let deps = dependencies(primaryType);
@@ -74,15 +70,12 @@ var typedData = {
   function typeHash(primaryType) {
     return ethUtil.keccak256(encodeType(primaryType));
   }
-  
   function encodeData(primaryType, data) {
     let encTypes = [];
     let encValues = [];
-  
     // Add typehash
     encTypes.push('bytes32');
     encValues.push(typeHash(primaryType));
-  
     // Add field contents
     for (let field of types[primaryType]) {
         let value = data[field.name];
@@ -101,14 +94,11 @@ var typedData = {
             encValues.push(value);
         }
     }
-  
     return abi.rawEncode(encTypes, encValues);
   }
-  
   function structHash(primaryType, data) {
     return ethUtil.keccak256(encodeData(primaryType, data));
   }
-  
   function signHash() {
     return ethUtil.keccak256(
         Buffer.concat([
@@ -118,7 +108,6 @@ var typedData = {
         ]),
     );
   }
-  
   function myEcsign(messageHash, privateKey) {
    // messageHash = Buffer.from(messageHash.substr(2), 'hex')
     let signatureObj = ethUtil.ecsign(messageHash, privateKey);
@@ -137,7 +126,6 @@ contract('Session', (accounts) => {
   const puppetAddress3 = accounts[6];
   const puppetAddress4 = accounts[7];
   const puppetAddress5 = accounts[8];
-
   const providerPrivateKey = Buffer.from("a5f37d95f39a584f45f3297d252410755ced72662dbb886e6eb9934efb2edc93", 'hex');
   const regulatorPrivateKey = Buffer.from("2fc8c9e1f94711b52b98edab123503519b6a8a982d38d0063857558db4046d89", 'hex');
   const userPrivateKey = Buffer.from("d01a9956202e7b447ba7e00fe1b5ca8b3f777288da6c77831342dbd2cb022f8f", 'hex');
@@ -146,23 +134,6 @@ contract('Session', (accounts) => {
     OffchainPayment = await OffchainPayment.new(providerAddress, providerAddress, regulatorAddress, regulatorAddress, 4, {from: providerAddress});
     Session = await Session.new({from: userAddress});
   });
-
-  // it("init session", async()=>{
-  //   let res = await this.Session.initSession(providerAddress, providerAddress, [userAddress, puppetAddress], this.OffchainPayment.address, "0x0");
-  //   let sessionID = res.receipt.logs[0].args.sessionID;
-  //   // console.log(res.receipt.logs[0].args.sessionID);
-  //   let sessionData = await this.Session.sessions.call(sessionID);
-  //   //console.log(sessionData);
-  //   assert.equal(sessionData.status, 1, "status should be 1");
-  // });
-
-  // it("join session", async()=>{
-  //   let res = await this.Session.initSession(providerAddress, providerAddress, [userAddress, puppetAddress], this.OffchainPayment.address, "0x0");
-  //   let sessionID = res.receipt.logs[0].args.sessionID;
-  //   res = await this.Session.joinSession(sessionID, puppetAddress2);
-  //   let player = await this.Session.players.call(sessionID, 2);
-  //   assert.equal(player, puppetAddress2, "player should join session");
-  // })
 
   it("send message", async()=>{
     let sessionID = web3.utils.soliditySha3("ok");

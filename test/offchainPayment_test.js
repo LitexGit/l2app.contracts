@@ -170,8 +170,6 @@ contract('OffchainPayment', (accounts) => {
     );
 
     await this.offchainPayment.onchainProviderDeposit(tokenAddress, amount, { from: regulatorAddress});
-
-
     amount = 8;
     let nonce = 888;
     let messageHash = web3.utils.soliditySha3(providerAddress, channelID, amount, nonce);
@@ -180,15 +178,12 @@ contract('OffchainPayment', (accounts) => {
     signature = myEcsign(messageHash, regulatorPrivateKey);
     await this.offchainPayment.confirmRebalance(messageHash, signature, {from: regulatorAddress});
 
-    
-
     let balance = 2;
     nonce = 1;
     let additionalHash = channelID;
     messageHash = web3.utils.soliditySha3(providerAddress, channelID, balance, nonce, additionalHash);
     signature = myEcsign(messageHash, providerPrivateKey);
     await this.offchainPayment.transfer(userAddress, channelID, balance, nonce, additionalHash, signature, {from: providerAddress});
-
 
     messageHash = web3.utils.soliditySha3(providerAddress, channelID, balance, nonce, additionalHash);
     signature = myEcsign(messageHash, providerPrivateKey);

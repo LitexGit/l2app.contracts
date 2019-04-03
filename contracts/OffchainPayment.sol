@@ -597,8 +597,8 @@ contract OffchainPayment {
         public
     {
         RebalanceProof storage rebalanceProof = rebalanceProofMap[channelID];
-        require(rebalanceProof.amount < amount);
-        require(rebalanceProof.nonce < nonce);
+        require(rebalanceProof.amount < amount, "invalid amount");
+        require(rebalanceProof.nonce < nonce, "invalid nonce");
         bytes32 messageHash = keccak256(
             abi.encodePacked(
                 onchainPayment,
@@ -607,7 +607,7 @@ contract OffchainPayment {
                 nonce
             )
         );
-        require(ECDSA.recover(messageHash, signature) == provider);
+        require(ECDSA.recover(messageHash, signature) == provider, "invalid provider sig");
         RebalanceProof storage proposeRebalanceProof = proposeRebalanceProofMap[messageHash];
         proposeRebalanceProof.channelID = channelID;
         require(amount > proposeRebalanceProof.amount);

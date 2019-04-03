@@ -12,8 +12,8 @@ message Transfer {
     // uint32 num = 2 [ (soltype) = "uint8" ];
     // bytes addr = 3 [ (soltype) = "address" ];
     bytes channelID = 1 [ (soltype) = "bytes32" ];
-    bytes balance = 2 [ (soltype) = "uint256" ];
-    bytes nonce = 3 [ (soltype) = "uint256" ];
-    bytes amount = 4 [ (soltype) = "uint256" ];
+    uint64 balance = 2 [ (soltype) = "uint" ];
+    uint64 nonce = 3 [ (soltype) = "uint" ];
+    uint64 amount = 4 [ (soltype) = "uint" ];
     bytes additionalHash = 5 [ (soltype) = "bytes32" ];
 }

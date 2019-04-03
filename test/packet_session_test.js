@@ -5,6 +5,8 @@ var Session = artifacts.require("Session");
 const abi = require('ethereumjs-abi');
 var protobuf = require("protobufjs");
 protobuf.common('google/protobuf/descriptor.proto', {})
+let rlp = require("rlp");
+
 
 var typedData = {
     types: {
@@ -26,13 +28,13 @@ var typedData = {
         name: 'litexlayer2',
         version: '1',
         chainId: 4,
-        verifyingContract: '0x7C765426aB9d7BCCf151C3d8D03f1368c50c9408',
+        verifyingContract: '0xd099044e12af61733823161006AD70aB1fAB3635',
     },
     message: {
         channelID: '',
-        balance: 1,
-        nonce: 8,
-        additionalHash: ''
+        balance: 0,
+        nonce: 0,
+        additionalHash: '',
     },
   };
   const types = typedData.types;
@@ -118,7 +120,8 @@ var typedData = {
   async function sessionTransfer(channelID, balance, nonce, amount, additionalHash) {
     let transferPB = await protobuf.load("/Users/vincent/Develop/l2ContractTruffle/contracts/proto/transfer.proto");
     let Transfer = transferPB.lookupType("TransferData.Transfer");
-    let payload = {channelID: web3.utils.hexToBytes(channelID), balance: [balance], nonce: [nonce], amount: [amount], additionalHash: web3.utils.hexToBytes(additionalHash)};
+    // let payload = {channelID: web3.utils.hexToBytes(channelID), balance: web3.utils.hexToBytes(web3.utils.toHex(balance)), nonce: web3.utils.hexToBytes(web3.utils.toHex(nonce)), amount: web3.utils.hexToBytes(web3.utils.toHex(amount)), additionalHash: web3.utils.hexToBytes(additionalHash)};
+    let payload = {channelID: web3.utils.hexToBytes(channelID), balance: balance, nonce: nonce, amount: amount, additionalHash: web3.utils.hexToBytes(additionalHash)};
     let errMsg = Transfer.verify(payload);
     if (errMsg)
         throw Error(errMsg);
@@ -126,20 +129,22 @@ var typedData = {
     return Transfer.encode(message).finish().toJSON().data;
   }
 
+  var sessionData = [];
+
 contract('Session', (accounts) => {
   const providerAddress = accounts[0];
   const regulatorAddress = accounts[1];
   const userAddress = accounts[2];
   const tokenAddress = accounts[3];
   const puppetAddrs = [accounts[4], accounts[5], accounts[6], accounts[7], accounts[8]];
-  const puppetPrivates = [Buffer.from("7d6e80e14e422aa0fa7a8a09fe5d057b10aec68e2de04136f138212853d3d6d6", 'hex'),
-  Buffer.from("5ed11d237517c6b3b61bb2157a182f92ca8203f2ae21eee864d749e44bb65031", 'hex'),
-  Buffer.from("6b5fd6774910f142d63c4e75043ce8b677090fd38b09aae8dd3c74c67d5b8eab", 'hex'),
-  Buffer.from("045d1ab2a05f596f869f034e3b3c590a1e4608e4526566020f01e72c8bed6c5c", 'hex'),
-  Buffer.from("24465bb6e9c0caf65107d3107adb3c4aa033681a968f511dbdcdf2b9054c3fd0", 'hex')];
-  const providerPrivateKey = Buffer.from("a5f37d95f39a584f45f3297d252410755ced72662dbb886e6eb9934efb2edc93", 'hex');
-  const regulatorPrivateKey = Buffer.from("2fc8c9e1f94711b52b98edab123503519b6a8a982d38d0063857558db4046d89", 'hex');
-  const userPrivateKey = Buffer.from("d01a9956202e7b447ba7e00fe1b5ca8b3f777288da6c77831342dbd2cb022f8f", 'hex');
+  const puppetPrivates = [Buffer.from("4b50d8ec4f6f785fa437a847349660227f589690192545c6a6c4e02cea7b72c2", 'hex'),
+  Buffer.from("d94151d7da553e7dc96ff4bff0e9b84b9588990ec7e8bc25bbe3d03f93bfdf13", 'hex'),
+  Buffer.from("75b60528a836fc1e3164da326fb93f436632046e1ea295c5604d721dd8fbb1db", 'hex'),
+  Buffer.from("dc7402b2e6765cf1b7e4b2b4516b3eebf20469effe6dd56f8840419b1f390615", 'hex'),
+  Buffer.from("b0e342b439fddfc37d230713676aaf2829af15a72f70d3b08321e3c8dd75481d", 'hex')];
+  const providerPrivateKey = Buffer.from("24e13489c83a8f892891075e94953348b9b1c5841a638819e6b062ea87122d4e", 'hex');
+  const regulatorPrivateKey = Buffer.from("de0fd81d5044820837c94143a5e32939fcc66e0705536d08ca350739ba34addb", 'hex');
+  const userPrivateKey = Buffer.from("d127601a67d8dc42ace4efcdfafa148bc09f3fea52b9df773f8d5bb3e5d71033", 'hex');
 
   beforeEach(async ()=>{
     OffchainPayment = await OffchainPayment.new(providerAddress, providerAddress, regulatorAddress, regulatorAddress, 4, {from: providerAddress});
@@ -162,8 +167,10 @@ contract('Session', (accounts) => {
     let nonce = 8;
     for(let i=0; i<puppetAddrs.length; i++) {
         let messageHash = web3.utils.soliditySha3(providerAddress, channelIDs[i], amount, nonce);
+        // console.log("propose rebalance message hash", messageHash);
         let signature = myEcsign(Buffer.from(messageHash.substr(2), 'hex'), providerPrivateKey);
-        await OffchainPayment.proposeRebalance(channelIDs[i], amount, nonce, signature, {from: providerAddress});
+        let res = await OffchainPayment.proposeRebalance(channelIDs[i], amount, nonce, signature, {from: providerAddress});
+        // console.log("propose rebalance log", res.receipt.logs[0]);
         signature = myEcsign(Buffer.from(messageHash.substr(2), 'hex'), regulatorPrivateKey);
         await OffchainPayment.confirmRebalance(messageHash, signature, {from: regulatorAddress});
     }
@@ -171,7 +178,7 @@ contract('Session', (accounts) => {
 
     // provider send hash random
     let ProviderRandomHash = transferPB.lookupType("PacketData.ProviderRandomHash");
-    let payload = {prHash: web3.utils.hexToBytes(web3.utils.soliditySha3(sessionID)), token: web3.utils.hexToBytes(tokenAddress), amount: [1000]};
+    let payload = {prHash: web3.utils.hexToBytes(web3.utils.soliditySha3(sessionID)), token: web3.utils.hexToBytes(tokenAddress), amount: 1000};
     // Verify the payload if necessary (i.e. when possibly incomplete or invalid)
     let errMsg = ProviderRandomHash.verify(payload);
     if (errMsg)
@@ -180,7 +187,7 @@ contract('Session', (accounts) => {
     let message = ProviderRandomHash.create(payload); // or use .fromObject if conversion is necessary
     // Encode a message to an Uint8Array (browser) or Buffer (node)
     let buffer = ProviderRandomHash.encode(message).finish().toJSON().data;
-    console.log("buffer", typeof buffer);
+    // console.log("buffer", typeof buffer);
     let hash = web3.utils.soliditySha3(providerAddress, providerAddress, sessionID, {t: 'uint8', v: 1}, {t: 'bytes', v: web3.utils.bytesToHex(buffer)});
     let sig = myEcsign(Buffer.from(hash.substr(2), 'hex'), providerPrivateKey);
     await Session.sendMessage(providerAddress, providerAddress, sessionID, 1, buffer, sig, "0x", "0x", {from: providerAddress});
@@ -200,7 +207,8 @@ contract('Session', (accounts) => {
     for(let i=0; i<puppetAddrs.length; i++) {
         let hash = web3.utils.soliditySha3(puppetAddrs[i], providerAddress, sessionID, {t: 'uint8', v: 2}, {t: 'bytes', v: web3.utils.bytesToHex(buffer)});
         let sig = myEcsign(Buffer.from(hash.substr(2), 'hex'), puppetPrivates[i]);
-        let addHash = web3.utils.soliditySha3({t: 'uint256', v: 1000}, hash);
+        let addHash = web3.utils.soliditySha3({t: 'bytes32', v: hash}, {t: 'uint256', v: 1000});
+        // console.log("add hash", addHash);
         let tData = await sessionTransfer(channelIDs[i], 1000, 1, 1000, addHash);
         typedData.message.channelID = channelIDs[i];
         typedData.message.balance = 1000;
@@ -208,7 +216,11 @@ contract('Session', (accounts) => {
         typedData.message.additionalHash = addHash;
         let paySig = myEcsign(signHash(), puppetPrivates[i])
         let res = await Session.sendMessage(puppetAddrs[i], providerAddress, sessionID, 2, buffer, sig, tData, paySig, {from: puppetAddrs[i]});
-        console.log(i, '---', res.receipt.status);
+        // console.log(i, '---', res.receipt.status);
+        // console.log("user send hash log", res.receipt.logs[0]);
+        // console.log("user send hash balance", res.receipt.logs[0].args.balance.toNumber());
+        // console.log("user send hash nonce", res.receipt.logs[0].args.nonce.toNumber());
+        // console.log("user send hash amount", res.receipt.logs[0].args.amount.toNumber());
     }
 
     // UserHashReady
@@ -249,7 +261,7 @@ contract('Session', (accounts) => {
         // typedData.message.additionalHash = addHash;
         // let paySig = myEcsign(signHash(), puppetPrivates[i])
         let res = await Session.sendMessage(puppetAddrs[i], providerAddress, sessionID, 4, buffer, sig, "0x", "0x", {from: puppetAddrs[i]});
-        console.log(i, '---', res.receipt.status);
+        // console.log(i, '---', res.receipt.status);
     }
 
     // ProviderSettle
@@ -270,38 +282,36 @@ contract('Session', (accounts) => {
         let addHash;
         let tData;
         if(i == 4) { // 1176 196
-            addHash = web3.utils.soliditySha3({t: 'uint256', v: 1000}, hash);
-            tData = await sessionTransfer(channelIDs[i], 1000, 1, 1000, addHash);
-            typedData.message.balance = 1000;
+            addHash = web3.utils.soliditySha3({t: 'bytes32', v: hash}, {t: 'uint256', v: 196});
+            tData = await sessionTransfer(channelIDs[i], 196, 1, 196, addHash);
+            typedData.message.balance = 196;
         } else {
-            addHash = web3.utils.soliditySha3({t: 'uint256', v: 1000}, hash);
-            tData = await sessionTransfer(channelIDs[i], 1000, 1, 1000, addHash);
-            typedData.message.balance = 1000;
+            addHash = web3.utils.soliditySha3({t: 'bytes32', v: hash}, {t: 'uint256', v: 1176});
+            tData = await sessionTransfer(channelIDs[i], 1176, 1, 1176, addHash);
+            typedData.message.balance = 1176;
         }
-        console.log("addHash", addHash);
+        // console.log("addHash", addHash);
         typedData.message.channelID = channelIDs[i];
         typedData.message.nonce = 1;
         typedData.message.additionalHash = addHash;
         let paySig = myEcsign(signHash(), providerPrivateKey)
         let res = await Session.sendMessage(providerAddress, puppetAddrs[i], sessionID, 5, buffer, sig, tData, paySig, {from: providerAddress});
-        console.log(i, '---', res.receipt.status);
-    }  
+        // console.log(i, '---', res.receipt.status);
+        // res = await Session.exportSessionBytes.call(sessionID);
+        // console.log("exports bytes", res);
+    }
+    
+    res = await Session.exportSession.call(sessionID);
+    //sessionData = res;
+    //console.log('resssssss', res[0][3], typeof res[0][3]);
 
+    for(let k=0; k<res.length; k++){
+        let m = res[k];
+        sessionData.push([m[0], m[1], m[2], web3.utils.toBN(m[3]), m[4], m[5], m[6], web3.utils.toBN(m[7]), web3.utils.toBN(m[8]), web3.utils.toBN(m[9]), m[10], m[11]]);
+    }
+    console.log("session data", sessionData);
+    let rlpencoded = rlp.encode(sessionData).toString('hex');
+    console.log("rlp encoded ", rlpencoded);
 
-    // let balance = '1';
-    // let nonce = '8';
-    // let ispuppet = await OffchainPayment.isPuppet(userAddress, userAddress);
-    // console.log("is puppet", ispuppet);
-    // let hash = web3.utils.soliditySha3(userAddress, providerAddress, sessionID, {t: 'uint8', v: 2}, {t: 'bytes', v: "0x14791057"});
-    // let puppetSig = myEcsign(Buffer.from(hash.substr(2), 'hex'), userPrivateKey);
-    // let additionalHash = web3.utils.soliditySha3(hash, 1);
-    // typedData.message.channelID = channelID;
-    // typedData.message.additionalHash = additionalHash;
-    // console.log("additon hash", additionalHash);
-    // let signature = myEcsign(signHash(), userPrivateKey)
-
-
-    // res = await Session.sendMessage(userAddress, providerAddress, sessionID, 2, "0x14791057", puppetSig, buffer, signature, {from: userAddress});
-    // console.log("res", res.logs[0]);
   })
 });

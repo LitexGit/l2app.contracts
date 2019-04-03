@@ -513,7 +513,8 @@ contract OffchainPayment {
         emit ConfirmProviderWithdraw (
             token,
             providerWithdrawProof.balance,
-            providerWithdrawProof.lastCommitBlock
+            providerWithdrawProof.lastCommitBlock,
+            providerWithdrawProof.signature
         );
     }
 
@@ -583,7 +584,9 @@ contract OffchainPayment {
             signer,
             csProof.balance,
             csProof.lastCommitBlock,
-            csProof.isConfirmed
+            csProof.isConfirmed,
+            csProof.providerSignature,
+            csProof.regulatorSignature
         );
     }
 
@@ -781,7 +784,8 @@ contract OffchainPayment {
         emit OnchainUserDeposit(
             user,
             channelID,
-            deposit
+            deltaDeposit,
+            deposit 
         );
     }
 
@@ -833,6 +837,7 @@ contract OffchainPayment {
         channel.userWithdraw += amount;
 
         emit OnchainUserWithdraw(
+            channel.user,
             channelID,
             amount,
             withdraw,
@@ -851,9 +856,11 @@ contract OffchainPayment {
     {
         delete providerWithdrawProofMap[token];
 
-        /* PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
+        PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
         paymentNetwork.providerWithdraw = paymentNetwork.providerWithdraw + amount;
-        paymentNetwork.providerBalance = paymentNetwork.providerBalance - amount; */
+        paymentNetwork.providerBalance = paymentNetwork.providerBalance - amount;
+        paymentNetwork.providerOnchainBalance = int256(balance);
+
         emit OnchainProviderWithdraw(
             token,
             amount,
@@ -889,6 +896,7 @@ contract OffchainPayment {
         emit OnchainCooperativeSettleChannel(
             user,
             channelID,
+            channel.token,
             balance,
             lastCommitBlock
         );
@@ -1010,6 +1018,8 @@ contract OffchainPayment {
         paymentNetwork.providerBalance += providerSettleAmount;
 
         emit OnchainSettleChannel(
+            channel.user,
+            channel.token,
             channelID,
             userSettleAmount,
             providerSettleAmount
@@ -1271,7 +1281,8 @@ contract OffchainPayment {
     event ConfirmProviderWithdraw (
         address indexed token,
         int256 balance,
-        uint256 lastCommitBlock
+        uint256 lastCommitBlock,
+        bytes signature
     );
 
     event ProposeCooperativeSettle (
@@ -1287,7 +1298,9 @@ contract OffchainPayment {
         address confirmer,
         uint256 balance,
         uint256 lastCommitBlock,
-        bool isAllConfirmed
+        bool isAllConfirmed,
+        bytes providerSignature,
+        bytes regulatorSignature
     );
 
     event ProposeRebalance (
@@ -1324,7 +1337,8 @@ contract OffchainPayment {
     event OnchainUserDeposit (
         address indexed user,
         bytes32 indexed channelID,
-        uint256 deposit
+        uint256 deposit,
+        uint256 totalDeposit
     );
 
     event OnchainProviderDeposit (
@@ -1333,6 +1347,7 @@ contract OffchainPayment {
     );
 
     event OnchainUserWithdraw (
+        address indexed user,
         bytes32 indexed channelID,
         uint256 amount,
         uint256 withdraw,
@@ -1349,6 +1364,7 @@ contract OffchainPayment {
     event OnchainCooperativeSettleChannel(
         address indexed user,
         bytes32 channelID,
+        address token,
         uint256 balance,
         uint256 lastCommitBlock
     );
@@ -1375,6 +1391,8 @@ contract OffchainPayment {
     );
 
     event OnchainSettleChannel (
+        address indexed user,
+        address indexed token,
         bytes32 indexed channelID,
         uint256 userSettleAmount,
         uint256 providerSettleAmount

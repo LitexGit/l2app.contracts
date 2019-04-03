@@ -118,6 +118,30 @@ contract Session {
         );
     }
 
+    function kickUser(
+        bytes32 sessionID,
+        address user
+    )
+        public
+    {
+        require(sessions[sessionID].status == 1);
+        require(sessions[sessionID].provider == msg.sender);
+        address[] storage _players = players[sessionID];
+        uint256 idx = 0;
+        while(idx < _players.length){
+            if(_players[idx] == user){
+                delete _players[idx];
+                break;
+            }
+            idx++;
+        }
+        if(idx == _players.length) revert("user not exists");
+        emit KickUser(
+            sessionID,
+            user
+        );
+    }
+
     function sendMessage(
         address from,
         address to,
@@ -235,6 +259,11 @@ contract Session {
     );
 
     event JoinSession(
+        bytes32 indexed sessionID,
+        address indexed user
+    );
+
+    event KickUser(
         bytes32 indexed sessionID,
         address indexed user
     );

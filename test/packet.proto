@@ -36,15 +36,10 @@ message UserRevealRandom {
 message ProviderSettle {
     bytes pRandom = 1 [ (soltype) = "bytes32" ];
 }
-// // mType=6
-// message KickUser {
-//     bytes user = 1 [ (soltype) = "address" ];
-// }
+// mType=6
+// message CancelSession {}
 // mType=7
-// message CancelSession {
-//     
-// }
-
+// message Refund {}
 
 
 

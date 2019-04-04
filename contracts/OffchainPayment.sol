@@ -27,7 +27,8 @@ contract OffchainPayment {
         uint256 providerDeposit;
         uint256 providerWithdraw;
         uint256 providerRebalanceIn;
-        uint256 providerTotalSettled;
+        int256 providerTotalSettled;
+        uint256 onchainFeeWithdraw;
         // provider offchain balance
         uint256 providerBalance;
         // provider onchain balance
@@ -112,9 +113,8 @@ contract OffchainPayment {
     // token => provider withdraw proof
     mapping (address => ProviderWithdrawProof) public providerWithdrawProofMap;
     struct ProviderWithdrawProof {
-        // address token;
-        // balance after withdraw
-        int256 balance;
+        // total withdraw
+        uint256 amount;
         uint256 lastCommitBlock;
         bytes signature;
     }
@@ -340,6 +340,7 @@ contract OffchainPayment {
         BalanceProof storage balanceProof = balanceProofMap[channelID][provider];
         channel.providerBalance += arrearBalanceProofMap[channelID].balance - balanceProof.balance - (amount - feeProof.amount);
         require(amount == feeProof.amount + feeRateMap[token]*(arrearBalanceProofMap[channelID].balance - balanceProof.balance)/10000, "invalid fee");
+        paymentNetworkMap[token].providerBalance -= amount - feeProof.amount;
         channel.userBalance -= arrearBalanceProofMap[channelID].balance - balanceProof.balance;
         balanceProof.balance = arrearBalanceProofMap[channelID].balance;
         balanceProof.nonce = arrearBalanceProofMap[channelID].nonce;
@@ -474,21 +475,21 @@ contract OffchainPayment {
 
     function providerProposeWithdraw (
         address token,
-        int256 balance,
+        uint256 amount,
         uint256 lastCommitBlock
     )
         public
     {
         require(msg.sender == provider);
         ProviderWithdrawProof storage providerWithdrawProof = providerWithdrawProofMap[token];
-        require(balance < paymentNetworkMap[token].providerOnchainBalance);
-        require(uint256(paymentNetworkMap[token].providerOnchainBalance - balance) <= paymentNetworkMap[token].providerBalance);
+        require(amount > paymentNetworkMap[token].providerWithdraw);
+        require(amount - paymentNetworkMap[token].providerWithdraw <= paymentNetworkMap[token].providerBalance);
         require(lastCommitBlock > providerWithdrawProof.lastCommitBlock);
-        providerWithdrawProof.balance = balance;
+        providerWithdrawProof.amount = amount;
         providerWithdrawProof.lastCommitBlock = lastCommitBlock;
         emit ProviderProposeWithdraw (
             token,
-            balance,
+            amount,
             lastCommitBlock
         );
     }
@@ -504,7 +505,7 @@ contract OffchainPayment {
             abi.encodePacked(
                 onchainPayment,
                 token,
-                providerWithdrawProof.balance,
+                providerWithdrawProof.amount,
                 providerWithdrawProof.lastCommitBlock
             )
         );
@@ -512,7 +513,7 @@ contract OffchainPayment {
         providerWithdrawProof.signature = signature;
         emit ConfirmProviderWithdraw (
             token,
-            providerWithdrawProof.balance,
+            providerWithdrawProof.amount,
             providerWithdrawProof.lastCommitBlock,
             providerWithdrawProof.signature
         );
@@ -645,13 +646,15 @@ contract OffchainPayment {
         require(ECDSA.recover(messageHash, signature) == regulator);
         RebalanceProof storage rebalanceProof = rebalanceProofMap[proposeRebalanceProof.channelID];
         Channel storage channel = channelMap[proposeRebalanceProof.channelID];
+        paymentNetworkMap[channel.token].providerBalance -= proposeRebalanceProof.amount - rebalanceProof.amount;
+        paymentNetworkMap[channel.token].providerRebalanceIn += proposeRebalanceProof.amount - rebalanceProof.amount;
         channel.providerBalance += proposeRebalanceProof.amount - rebalanceProof.amount;
         rebalanceProof.channelID = proposeRebalanceProof.channelID;
         rebalanceProof.amount = proposeRebalanceProof.amount;
         rebalanceProof.nonce = proposeRebalanceProof.nonce;
         rebalanceProof.providerSignature = proposeRebalanceProof.providerSignature;
         rebalanceProof.regulatorSignature = signature;
-
+        
         emit ConfirmRebalance (
             rebalanceProof.channelID,
             id,
@@ -848,7 +851,7 @@ contract OffchainPayment {
     function onchainProviderWithdraw (
         address token,
         uint256 amount,
-        uint256 balance,
+        int256 balance,
         uint256 lastCommitBlock
     )
         isOperator(msg.sender)
@@ -859,7 +862,7 @@ contract OffchainPayment {
         PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
         paymentNetwork.providerWithdraw = paymentNetwork.providerWithdraw + amount;
         paymentNetwork.providerBalance = paymentNetwork.providerBalance - amount;
-        paymentNetwork.providerOnchainBalance = int256(balance);
+        paymentNetwork.providerOnchainBalance = balance;
 
         emit OnchainProviderWithdraw(
             token,
@@ -873,6 +876,7 @@ contract OffchainPayment {
         bytes32 channelID,
         address user,
         uint256 balance,
+        int256 providerRegain,
         uint256 lastCommitBlock
     )
     isOperator(msg.sender)
@@ -886,12 +890,15 @@ contract OffchainPayment {
         paymentNetwork.userTotalDeposit -= channel.userDeposit;
         paymentNetwork.userTotalWithdraw -= channel.userWithdraw;
 
-        RebalanceProof memory rebalanceProof = rebalanceProofMap[channelID];
-        uint256 channelTotalAmount = channel.userDeposit + rebalanceProof.amount - channel.userWithdraw;
-        uint256 providerSettleAmount = channelTotalAmount - balance;
+        // RebalanceProof memory rebalanceProof = rebalanceProofMap[channelID];
+        // uint256 channelTotalAmount = channel.userDeposit + rebalanceProof.amount - channel.userWithdraw;
+        // uint256 providerSettleAmount = channelTotalAmount - balance;
 
-        paymentNetwork.providerTotalSettled += providerSettleAmount;
-        paymentNetwork.providerBalance += providerSettleAmount;
+        paymentNetwork.providerTotalSettled += providerRegain;
+        paymentNetwork.providerBalance += uint256(int256(rebalanceProofMap[channelID].amount) + providerRegain);
+        paymentNetwork.providerRebalanceIn -= rebalanceProofMap[channelID].amount;
+        paymentNetwork.providerOnchainBalance += providerRegain;
+        // paymentNetwork.providerBalance += providerSettleAmount;
 
         emit OnchainCooperativeSettleChannel(
             user,
@@ -994,7 +1001,7 @@ contract OffchainPayment {
     function onchainSettleChannel (
         bytes32 channelID,
         uint256 userSettleAmount,
-        uint256 providerSettleAmount
+        int256 providerRegain
     )
         isOperator(msg.sender)
         public
@@ -1014,15 +1021,33 @@ contract OffchainPayment {
         paymentNetwork.userCount -= 1;
         paymentNetwork.userTotalDeposit -= channel.userDeposit;
         paymentNetwork.userTotalWithdraw -= channel.userWithdraw;
-        paymentNetwork.providerTotalSettled += providerSettleAmount;
-        paymentNetwork.providerBalance += providerSettleAmount;
+
+        paymentNetwork.providerTotalSettled += providerRegain;
+        paymentNetwork.providerBalance += uint256(int256(rebalanceProofMap[channelID].amount) + providerRegain);
+        paymentNetwork.providerRebalanceIn -= rebalanceProofMap[channelID].amount;
+        paymentNetwork.providerOnchainBalance += providerRegain;
 
         emit OnchainSettleChannel(
             channel.user,
             channel.token,
             channelID,
             userSettleAmount,
-            providerSettleAmount
+            providerRegain
+        );
+    }
+
+    function onchainRegulatorWithdraw(
+        address token,
+        uint256 amount
+    )
+        public
+        isOperator(msg.sender)
+    {
+        PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
+        paymentNetwork.onchainFeeWithdraw += amount;
+        emit OnchainRegulatorWithdraw(
+            token,
+            amount
         );
     }
 
@@ -1274,13 +1299,13 @@ contract OffchainPayment {
 
     event ProviderProposeWithdraw (
         address indexed token,
-        int256 balance,
+        uint256 amount,
         uint256 lastCommitBlock
     );
 
     event ConfirmProviderWithdraw (
         address indexed token,
-        int256 balance,
+        uint256 amount,
         uint256 lastCommitBlock,
         bytes signature
     );
@@ -1357,7 +1382,7 @@ contract OffchainPayment {
     event OnchainProviderWithdraw (
         address indexed token,
         uint256 amount,
-        uint256 balance,
+        int256 balance,
         uint256 lastCommitBlock
     );
 
@@ -1395,7 +1420,12 @@ contract OffchainPayment {
         address indexed token,
         bytes32 indexed channelID,
         uint256 userSettleAmount,
-        uint256 providerSettleAmount
+        int256 providerSettleAmount
+    );
+
+    event OnchainRegulatorWithdraw (
+        address indexed token,
+        uint256 amount
     );
 
     event UnlockUserWithdrawProof (

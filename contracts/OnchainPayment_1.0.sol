@@ -15,6 +15,12 @@ contract OnchainPayment {
     address public provider;
     // tokenAddress => providerBalance
     mapping (address => int256) public providerBalance;
+    // tokenAddress => providerDeposit
+    mapping (address => uint256) public providerDepositMap;
+    // tokenAddress => providerWithdraw
+    mapping (address => uint256) public providerWithdrawMap;
+    // tokenAddress => providerRegain
+    mapping (address => int256) public providerRegainMap;
     // tokenAddress => regulatorWithdraw
     mapping (address => uint256) public regulatorWithdrawMap;
 
@@ -288,6 +294,7 @@ contract OnchainPayment {
         if (token == address(0x0)) {
             require(msg.value > 0, "invalid deposit");
             providerBalance[token] += int256(msg.value);
+            providerDepositMap[token] += msg.value;
             emit ProviderNewDeposit (
                 token,
                 msg.value,
@@ -297,6 +304,7 @@ contract OnchainPayment {
             require(amount > 0, "invalid deposit");
             ERC20(token).safeTransferFrom(msg.sender, address(this), amount);
             providerBalance[token] += int256(amount);
+            providerDepositMap[token] += amount;
             emit ProviderNewDeposit (
                 token,
                 amount,
@@ -351,7 +359,7 @@ contract OnchainPayment {
 
     function providerWithdraw (
         address token,
-        int256 balance,
+        uint256 amount,
         uint256 lastCommitBlock,
         bytes memory regulatorSignature
     )
@@ -359,30 +367,28 @@ contract OnchainPayment {
         commitBlockValid(lastCommitBlock)
     {
         require(msg.sender == provider, "only provider can trigger");
-
         bytes32 messageHash = keccak256(
             abi.encodePacked(
                 address(this),
                 token,
-                balance,
+                amount,
                 lastCommitBlock
             )
         );
         require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invaild regulator signature");
-        require(balance < providerBalance[token], "invalid withdraw");
-
-        uint256 amount = uint256(providerBalance[token] - balance);
-        providerBalance[token] = balance;
+        // require(balance < providerBalance[token], "invalid withdraw");
+        uint256 withdraw = amount - providerWithdrawMap[token];
+        providerBalance[token] -= int256(withdraw);
+        providerWithdrawMap[token] = amount;
         if (token == address(0x0)) {
             address(provider).transfer(amount);
         } else {
             ERC20(token).safeTransfer(provider, amount);
         }
-
         emit ProviderWithdraw (
             token,
-            amount,
-            balance,
+            withdraw,
+            providerBalance[token],
             lastCommitBlock
         );
     }
@@ -405,7 +411,6 @@ contract OnchainPayment {
             )
         );
         require(ECDSA.recover(messageHash, signature) == provider, "invaild provider signature");
-
         require(regulatorWithdrawMap[token] + withdrawAmount <= feeAmount, "insufficient funds");
         regulatorWithdrawMap[token] += withdrawAmount;
         if (token == address(0x0)) {
@@ -413,9 +418,7 @@ contract OnchainPayment {
         } else {
             ERC20(token).safeTransfer(regulator, withdrawAmount);
         }
-
         providerBalance[token] -= int256(withdrawAmount);
-
         emit RegulatorWithdraw (
             token,
             withdrawAmount,
@@ -452,8 +455,10 @@ contract OnchainPayment {
 
         uint256 payout = safeAdd(balance, channel.withdraw);
         if (payout >= channel.deposit) {
+            providerRegainMap[channel.token] -= int256(payout - channel.deposit);
             providerBalance[channel.token] -= int256(payout - channel.deposit);
         } else {
+            providerRegainMap[channel.token] += int256(channel.deposit - payout);
             providerBalance[channel.token] += int256(channel.deposit - payout);
         }      
 
@@ -468,6 +473,7 @@ contract OnchainPayment {
             channelID,
             channel.token, 
             balance,
+            int256(channel.deposit - payout),
             lastCommitBlock
         );
 
@@ -624,15 +630,27 @@ contract OnchainPayment {
         );
 
         if (min == channel.userBalance) {
-            // require(channel.inAmount >= margin, "provider not sufficient funds");
             providerTransferredAmount = safeSub(channel.inAmount, margin);
-
-            // require(safeAdd(channel.deposit, margin) >= channel.withdraw, "user not sufficient funds");
             userTransferredAmount = safeSub(safeAdd(channel.deposit, margin), channel.withdraw);
+            providerRegainMap[channel.token] -= int256(margin);
+            emit ChannelSettled (
+                channel.user,
+                channel.token,
+                channelID,
+                userTransferredAmount,
+                0 - int256(margin)
+            );
         } else {
-            // require(channel.deposit >= safeAdd(channel.withdraw, margin), "user not sufficient funds");
             userTransferredAmount = safeSub(channel.deposit, safeAdd(channel.withdraw, margin));
             providerTransferredAmount = safeAdd(channel.inAmount, margin);
+            providerRegainMap[channel.token] += int256(margin);
+            emit ChannelSettled (
+                channel.user,
+                channel.token,
+                channelID,
+                userTransferredAmount,
+                int256(margin)
+            );
         }
 
         if (userTransferredAmount > 0) {
@@ -645,13 +663,6 @@ contract OnchainPayment {
         if (providerTransferredAmount > 0) {
             providerBalance[channel.token] += int256(providerTransferredAmount);
         }
-        emit ChannelSettled (
-            channel.user,
-            channel.token,
-            channelID,
-            userTransferredAmount,
-            providerTransferredAmount
-        );
         delete channelCounter[channel.user][channel.token];
         delete channels[channelID];
     }
@@ -736,6 +747,7 @@ contract OnchainPayment {
         bytes32 indexed channelID,
         address token,
         uint256 balance,
+        int256 providerRegain,
         uint256 lastCommitBlock
     );
 
@@ -765,8 +777,8 @@ contract OnchainPayment {
         address indexed user,
         address indexed token,
         bytes32 indexed channelID,
-        uint256 transferTouserAmount,
-        uint256 transferToProviderAmount
+        uint256 transferToUserAmount,
+        int256 providerRegain
     );
 
     /**

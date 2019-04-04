@@ -12,6 +12,7 @@
     "ethereumjs-util": "^6.1.0",
     "google-protobuf": "^3.7.1",
     "protobufjs": "^6.8.8",
+    "rlp": "^2.2.3",
     "truffle-privatekey-provider": "^1.1.0",
     "web3": "^1.0.0-beta.48"
   },

@@ -35,7 +35,7 @@ contract Session {
         address from;
         address to;
         bytes32 sessionID;
-        uint8 mType;
+        uint mType;
         bytes content;
         bytes signature;
         // balance proof
@@ -118,6 +118,30 @@ contract Session {
         );
     }
 
+    function kickUser(
+        bytes32 sessionID,
+        address user
+    )
+        public
+    {
+        require(sessions[sessionID].status == 1);
+        require(sessions[sessionID].provider == msg.sender);
+        address[] storage _players = players[sessionID];
+        uint256 idx = 0;
+        while(idx < _players.length){
+            if(_players[idx] == user){
+                delete _players[idx];
+                break;
+            }
+            idx++;
+        }
+        if(idx == _players.length) revert("user not exists");
+        emit KickUser(
+            sessionID,
+            user
+        );
+    }
+
     function sendMessage(
         address from,
         address to,
@@ -150,9 +174,9 @@ contract Session {
         if (transferData.balance != 0 && transferData.nonce != 0 && mType != 0) {
             
             mHash = keccak256(
-                abi.encodePacked(
-                    transferData.amount,
-                    mHash
+                abi.encodePacked(                  
+                    mHash,
+                    transferData.amount
                 )
             );
             require(transferData.additionalHash == mHash, "invalid additional hash");
@@ -194,15 +218,15 @@ contract Session {
     /**
      * External Functions
      */
-    function exportSessionBytes(
-        bytes32 sessionID
-    )
-        external
-        view
-        returns(bytes memory)
-    {
-        return abi.encode(messages[sessionID]);
-    }
+    // function exportSessionBytes(
+    //     bytes32 sessionID
+    // )
+    //     external
+    //     view
+    //     returns(bytes memory)
+    // {
+    //     return abi.encode(messages[sessionID]);
+    // }
 
     function exportSession(
         bytes32 sessionID
@@ -235,6 +259,11 @@ contract Session {
     );
 
     event JoinSession(
+        bytes32 indexed sessionID,
+        address indexed user
+    );
+
+    event KickUser(
         bytes32 indexed sessionID,
         address indexed user
     );

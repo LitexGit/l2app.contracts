@@ -146,39 +146,6 @@ contract('OffchainPayment', (accounts) => {
     this.offchainPayment = await OffchainPayment.new(providerAddress, providerAddress, regulatorAddress, regulatorAddress, 1, {from: providerAddress});
   });
 
-  it("should onchainAddPuppet successfully", async() =>{
-    await this.offchainPayment.onchainAddPuppet(userAddress, userAddress, {from: regulatorAddress});
-    let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
-    let amount = 100000;
-
-    await this.offchainPayment.onchainOpenChannel(
-    userAddress,
-    tokenAddress,
-    channelID,
-    amount,
-    { from: regulatorAddress}
-    );
-
-
-    let balance = 1;
-    let nonce = 8;
-    let additionalHash = channelID;
-
-    typedData.message.channelID = channelID;
-    typedData.message.additionalHash = channelID;
-
-    console.log(typedData.message);
-
-    let signature = myEcsign(signHash(), userPrivateKey)
-
-    // let signature = myEcsign(messageHash, userPrivateKey);
-    await this.offchainPayment.transfer(providerAddress, channelID, balance, nonce, additionalHash, signature, {from: userAddress});
-    let balanceProofData = await this.offchainPayment.arrearBalanceProofMap.call(channelID);
-
-    console.log("balance proof: ", balanceProofData);
-    // assert.equal(balanceProofData.nonce.toNumber(), nonce, "nonce should be right");
-  });
-
   it ("eip should succ", async()=>{
     this.eip = await eip.new(1, {from: providerAddress});
 

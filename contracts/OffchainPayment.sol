@@ -320,8 +320,8 @@ contract OffchainPayment {
         emit GuardBalanceProof (
             msg.sender,
             channelID,
-            balance,
-            nonce
+            balanceProof.balance,
+            balanceProof.nonce
         );
     }
 

@@ -3,6 +3,7 @@ pragma experimental ABIEncoderV2;
 
 import "./lib/ECDSA.sol";
 import "./lib/TransferData.sol";
+import "./lib/RLPReader.sol";
 
 contract OCPInterface {
     function transfer (address to, bytes32 channelID, uint256 balance, uint256 nonce, bytes32 additionalHash, bytes memory signature) public;
@@ -10,6 +11,9 @@ contract OCPInterface {
 }
 
 contract Session {
+    using RLPReader for bytes;
+    using RLPReader for uint;
+    using RLPReader for RLPReader.RLPItem;
     /**
      *  States
      */
@@ -46,6 +50,15 @@ contract Session {
         uint256 amount;
         bytes32 additionalHash;
         bytes paymentSignature;
+    }
+
+    struct Transfer {
+        bytes32 channelID;   
+        uint256 balance;   
+        uint256 nonce;   
+        uint256 amount;   
+        bytes32 additionalHash;   
+        bytes signature;
     }
 
     // game => counter
@@ -149,8 +162,7 @@ contract Session {
         uint8 mType,
         bytes memory content,
         bytes memory signature,
-        bytes memory protoData,
-        bytes memory paymentSig
+        bytes memory paymentData
     )
         public
     {
@@ -169,8 +181,16 @@ contract Session {
             require(isUserExist(sessionID, from), "invalid user");
             require(OCPInterface(sessions[sessionID].paymentContract).isPuppet(from, ECDSA.recover(mHash, signature)), "invalid puppet signature");
         }
-        TransferData.Transfer memory transferData;
-        if (protoData.length != 0) transferData = TransferData.decTransfer(protoData);
+        Transfer memory transferData;
+        if (paymentData.length != 0) {
+            RLPReader.RLPItem[] memory items = paymentData.toRlpItem().toList();
+            transferData.channelID = toBytes32(items[0].toBytes());
+            transferData.balance = items[1].toUint();
+            transferData.nonce = items[2].toUint();
+            transferData.amount = items[3].toUint();
+            transferData.additionalHash = toBytes32(items[4].toBytes());
+            transferData.signature = items[5].toBytes();
+        }
         if (transferData.balance != 0 && transferData.nonce != 0 && mType != 0) {
             mHash = keccak256(
                 abi.encodePacked(                  
@@ -179,11 +199,11 @@ contract Session {
                 )
             );
             require(transferData.additionalHash == mHash, "invalid additional hash");
-            OCPInterface(sessions[sessionID].paymentContract).transfer(to, transferData.channelID, transferData.balance, transferData.nonce, transferData.additionalHash, paymentSig);
+            OCPInterface(sessions[sessionID].paymentContract).transfer(to, transferData.channelID, transferData.balance, transferData.nonce, transferData.additionalHash, transferData.signature);
         }
         Message[] storage message = messages[sessionID];
-        message.push(Message(from, to, sessionID, mType, content, signature, transferData.channelID, transferData.balance, transferData.nonce, transferData.amount, transferData.additionalHash, paymentSig));
-        emit SendMessage(from, to, sessionID, mType, content, signature, transferData.channelID, transferData.balance, transferData.nonce, transferData.amount, transferData.additionalHash, paymentSig);
+        message.push(Message(from, to, sessionID, mType, content, signature, transferData.channelID, transferData.balance, transferData.nonce, transferData.amount, transferData.additionalHash, transferData.signature));
+        emit SendMessage(from, to, sessionID, mType, content, signature, transferData.channelID, transferData.balance, transferData.nonce, transferData.amount, transferData.additionalHash, transferData.signature);
     }
 
     function closeSession(
@@ -244,6 +264,19 @@ contract Session {
         returns(address[] memory)
     {
         return players[sessionID];
+    }
+
+    /**
+     *  Internal Functions
+     */
+
+    function toBytes32(bytes memory source) internal pure returns (bytes32 result) {
+        if (source.length == 0) {
+            return 0x0;
+        }
+        assembly {
+            result := mload(add(source, 32))
+        }
     }
 
     /**

@@ -5,6 +5,7 @@ var OffchainPayment = artifacts.require("OffchainPayment");
 var Session = artifacts.require("Session");
 const abi = require('ethereumjs-abi');
 var protobuf = require("protobufjs");
+let rlp = require("rlp");
 protobuf.common('google/protobuf/descriptor.proto', {})
 
 var typedData = {
@@ -144,19 +145,12 @@ contract('Session', (accounts) => {
     let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
     console.log("channel id", channelID);
     let amount = web3.utils.toWei('10', 'ether');
-    await OffchainPayment.onchainOpenChannel(
-    userAddress,
-    tokenAddress,
-    channelID,
-    amount,
-    { from: regulatorAddress});
-    let balance = "123";
+    await OffchainPayment.onchainOpenChannel( userAddress, tokenAddress, channelID, amount, { from: regulatorAddress}); 
+    let balance = "42624513554376";
     // let balance = web3.utils.toBN(web3.utils.toWei('1', 'ether'));
     // let balance = web3.utils.toWei('0.012345626', 'ether');
     let nonce = 199;
     amount = 10000000;
-    let ispuppet = await OffchainPayment.isPuppet(userAddress, userAddress);
-    console.log("is puppet", ispuppet);
     let hash = web3.utils.soliditySha3(userAddress, providerAddress, sessionID, {t: 'uint8', v: 2}, {t: 'bytes', v: "0x14791057"});
     let puppetSig = myEcsign(Buffer.from(hash.substr(2), 'hex'), userPrivateKey);
     let additionalHash = web3.utils.soliditySha3(hash, amount);
@@ -166,59 +160,15 @@ contract('Session', (accounts) => {
     typedData.message.nonce = nonce;
     console.log("additon hash", additionalHash);
     let signature = myEcsign(signHash(), userPrivateKey)
-    //console.log("sss", signature);
-
-
-    let transferPB = await protobuf.load("/Users/vincent/Develop/l2ContractTruffle/contracts/proto/transfer.proto");
-  
-    // Obtain a message type
-    var Transfer = transferPB.lookupType("TransferData.Transfer");
-
-    // Exemplary payload
-    //var payload = { channelID: "0x46c58114b911a44e571f6fbc181d2b50edde7033c96c7408fec77dce054694b1", balance: "0x1", nonce: "0x2", amount: "0x1", additionalHash: "0x46c58114b911a44e571f6fbc181d2b50edde7033c96c7408fec77dce054694b1" };
-    // var payload = {channelID: web3.utils.hexToBytes(channelID), balance: Long.fromString(balance, true), nonce: nonce, amount: amount, additionalHash: web3.utils.hexToBytes(additionalHash)};
-    var payload = {channelID: web3.utils.hexToBytes(channelID), balance: web3.utils.hexToBytes(web3.utils.numberToHex(balance)), nonce: web3.utils.hexToBytes(web3.utils.numberToHex(nonce)), amount: web3.utils.hexToBytes(web3.utils.numberToHex(amount)), additionalHash: web3.utils.hexToBytes(additionalHash)};
-    // Verify the payload if necessary (i.e. when possibly incomplete or invalid)
-    var errMsg = Transfer.verify(payload);
-    if (errMsg)
-        throw Error(errMsg);
-
-    // Create a new message
-    var message = Transfer.create(payload); // or use .fromObject if conversion is necessary
-
-    // Encode a message to an Uint8Array (browser) or Buffer (node)
-    var buffer = Transfer.encode(message).finish().toJSON().data;
-    // ... do something with buffer
-    //console.log("buffer", buffer);
-
-    res = await Session.sendMessage(userAddress, providerAddress, sessionID, 2, "0x14791057", puppetSig, buffer, signature, {from: userAddress});
+    console.log("sss", web3.utils.bytesToHex(signature));
+    let paymentData = [channelID, web3.utils.toHex(balance), nonce, amount, additionalHash, web3.utils.bytesToHex(signature)];
+    let rlpencode = '0x' + rlp.encode(paymentData).toString('hex');
+    res = await Session.sendMessage(userAddress, providerAddress, sessionID, 2, "0x14791057", puppetSig, rlpencode, {from: userAddress});
     console.log("res", res.logs[0]);
     console.log("balance", res.logs[0].args.balance.toNumber());
     console.log("nonce", res.logs[0].args.nonce.toNumber());
     console.log("amount", res.logs[0].args.amount.toNumber());
-      // this.Session.sendMessage(userAddress, providerAddress, sessionID, 2, "0x0", "0x0", buffer, signature, {from: userAddress}).then(
-      //   console.log
-      // );
-      // console.log("res", res);
 
-      // Decode an Uint8Array (browser) or Buffer (node) to a message
-      // var message = AwesomeMessage.decode(buffer);
-      // // ... do something with message
-  
-      // // If the application uses length-delimited buffers, there is also encodeDelimited and decodeDelimited.
-  
-      // // Maybe convert the message back to a plain object
-      // var object = AwesomeMessage.toObject(message, {
-      //     longs: String,
-      //     enums: String,
-      //     bytes: String,
-      //     // see ConversionOptions
-      // });
-
-    // let testPD = web3.utils.hexToBytes("0x46c58114b911a44e571f6fbc181d2b50edde7033c96c7408fec77dce054694b10a2046c58114b911a44e571f6fbc181d2b50edde7033c96c7408fec77dce054694b1");
-    // console.log(testPD);
-    // res = await this.Session.sendMessage(userAddress, providerAddress, sessionID, 2, "0x0", "0x0", "0x46c58114b911a44e571f6fbc181d2b50edde7033c96c7408fec77dce054694b10a2046c58114b911a44e571f6fbc181d2b50edde7033c96c7408fec77dce054694b1", signature, {from: userAddress});
-    // console.log(res);
   })
 
   // it("export messages", async()=>{

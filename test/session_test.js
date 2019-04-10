@@ -1,5 +1,6 @@
 const ethUtil = require('ethereumjs-util');
 const BigNumber = web3.BigNumber;
+const Long = require('long');
 var OffchainPayment = artifacts.require("OffchainPayment");
 var Session = artifacts.require("Session");
 const abi = require('ethereumjs-abi');
@@ -142,22 +143,27 @@ contract('Session', (accounts) => {
     await OffchainPayment.onchainAddPuppet(userAddress, userAddress, {from: regulatorAddress});
     let channelID = web3.utils.soliditySha3({t: 'address', v: providerAddress}, {t: 'address', v: userAddress});
     console.log("channel id", channelID);
-    let amount = 100000;
+    let amount = web3.utils.toWei('10', 'ether');
     await OffchainPayment.onchainOpenChannel(
     userAddress,
     tokenAddress,
     channelID,
     amount,
     { from: regulatorAddress});
-    // let balance = '1';
-    // let nonce = '8';
+    let balance = "123";
+    // let balance = web3.utils.toBN(web3.utils.toWei('1', 'ether'));
+    // let balance = web3.utils.toWei('0.012345626', 'ether');
+    let nonce = 199;
+    amount = 10000000;
     let ispuppet = await OffchainPayment.isPuppet(userAddress, userAddress);
     console.log("is puppet", ispuppet);
     let hash = web3.utils.soliditySha3(userAddress, providerAddress, sessionID, {t: 'uint8', v: 2}, {t: 'bytes', v: "0x14791057"});
     let puppetSig = myEcsign(Buffer.from(hash.substr(2), 'hex'), userPrivateKey);
-    let additionalHash = web3.utils.soliditySha3(hash, 1);
+    let additionalHash = web3.utils.soliditySha3(hash, amount);
     typedData.message.channelID = channelID;
     typedData.message.additionalHash = additionalHash;
+    typedData.message.balance = balance;
+    typedData.message.nonce = nonce;
     console.log("additon hash", additionalHash);
     let signature = myEcsign(signHash(), userPrivateKey)
     //console.log("sss", signature);
@@ -170,7 +176,8 @@ contract('Session', (accounts) => {
 
     // Exemplary payload
     //var payload = { channelID: "0x46c58114b911a44e571f6fbc181d2b50edde7033c96c7408fec77dce054694b1", balance: "0x1", nonce: "0x2", amount: "0x1", additionalHash: "0x46c58114b911a44e571f6fbc181d2b50edde7033c96c7408fec77dce054694b1" };
-    var payload = {channelID: web3.utils.hexToBytes(channelID), balance: 1, nonce: 8, amount: 1, additionalHash: web3.utils.hexToBytes(additionalHash)};
+    // var payload = {channelID: web3.utils.hexToBytes(channelID), balance: Long.fromString(balance, true), nonce: nonce, amount: amount, additionalHash: web3.utils.hexToBytes(additionalHash)};
+    var payload = {channelID: web3.utils.hexToBytes(channelID), balance: web3.utils.hexToBytes(web3.utils.numberToHex(balance)), nonce: web3.utils.hexToBytes(web3.utils.numberToHex(nonce)), amount: web3.utils.hexToBytes(web3.utils.numberToHex(amount)), additionalHash: web3.utils.hexToBytes(additionalHash)};
     // Verify the payload if necessary (i.e. when possibly incomplete or invalid)
     var errMsg = Transfer.verify(payload);
     if (errMsg)
@@ -186,6 +193,9 @@ contract('Session', (accounts) => {
 
     res = await Session.sendMessage(userAddress, providerAddress, sessionID, 2, "0x14791057", puppetSig, buffer, signature, {from: userAddress});
     console.log("res", res.logs[0]);
+    console.log("balance", res.logs[0].args.balance.toNumber());
+    console.log("nonce", res.logs[0].args.nonce.toNumber());
+    console.log("amount", res.logs[0].args.amount.toNumber());
       // this.Session.sendMessage(userAddress, providerAddress, sessionID, 2, "0x0", "0x0", buffer, signature, {from: userAddress}).then(
       //   console.log
       // );

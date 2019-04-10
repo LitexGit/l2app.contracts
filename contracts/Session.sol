@@ -172,7 +172,6 @@ contract Session {
         TransferData.Transfer memory transferData;
         if (protoData.length != 0) transferData = TransferData.decTransfer(protoData);
         if (transferData.balance != 0 && transferData.nonce != 0 && mType != 0) {
-            
             mHash = keccak256(
                 abi.encodePacked(                  
                     mHash,

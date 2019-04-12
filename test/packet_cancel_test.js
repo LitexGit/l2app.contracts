@@ -129,6 +129,41 @@ var typedData = {
     return Transfer.encode(message).finish().toJSON().data;
   }
 
+
+  function rlpEncodePayment(channelID, balance, nonce, amount, additionalHash, signature) {
+    let paymentData = [channelID, web3.utils.toHex(balance), nonce, amount, additionalHash, web3.utils.bytesToHex(signature)];
+    return '0x' + rlp.encode(paymentData).toString('hex');
+  }
+
+    // mType=1
+  function rlpEncodeProviderRandomHash(prHash, token, amount) {
+    let data = [prHash, token, web3.utils.toHex(amount)];
+    return '0x' + rlp.encode(data).toString('hex');
+  }
+
+    // mType=2
+  function rlpEncodeUserRandomHash(urHash) {
+    let data = [urHash];
+    return '0x' + rlp.encode(data).toString('hex');
+  }
+  // mType=3
+  function rlpEncodeUserHashReady(user1, user2, user3, user4, user5) {
+    let data = [user1, user2, user3, user4, user5];
+    return '0x' + rlp.encode(data).toString('hex');
+  }
+  // mType=4
+  function rlpEncodeUserRevealRandom(uRandom) {
+    let data = [uRandom];
+    return '0x' + rlp.encode(data).toString('hex');
+  }
+  // mType=5
+  function rlpEncodeProviderSettle(pRandom) {
+    let data = [pRandom];
+    return '0x' + rlp.encode(data).toString('hex');
+  }
+  // mType=6 CancelSession
+  // mType=7 Refund
+
   var sessionData = [];
 
 contract('Session', (accounts) => {
@@ -159,11 +194,11 @@ contract('Session', (accounts) => {
     let channelIDs = [];
     for(let i=0; i<puppetAddrs.length; i++) channelIDs.push(web3.utils.soliditySha3({t: 'address', v: puppetAddrs[i]}, {t: 'address', v: userAddress}))
     // console.log("channel id", channelID);
-    let amount = 10000000;
+    let amount = web3.utils.toWei('10', 'ether');
     for(let i=0; i<puppetAddrs.length; i++) await OffchainPayment.onchainOpenChannel( puppetAddrs[i], tokenAddress, channelIDs[i], amount, { from: regulatorAddress});
     // provider deposit
     await OffchainPayment.onchainProviderDeposit(tokenAddress, amount, { from: regulatorAddress});
-    amount = 100000;
+    amount = web3.utils.toWei('1', 'ether');;
     let nonce = 8;
     for(let i=0; i<puppetAddrs.length; i++) {
         let messageHash = web3.utils.soliditySha3(providerAddress, channelIDs[i], amount, nonce);
@@ -174,69 +209,35 @@ contract('Session', (accounts) => {
         signature = myEcsign(Buffer.from(messageHash.substr(2), 'hex'), regulatorPrivateKey);
         await OffchainPayment.confirmRebalance(messageHash, signature, {from: regulatorAddress});
     }
-    let transferPB = await protobuf.load("/Users/vincent/Develop/l2ContractTruffle/test/packet.proto");
 
     // provider send hash random
-    let ProviderRandomHash = transferPB.lookupType("PacketData.ProviderRandomHash");
-    let payload = {prHash: web3.utils.hexToBytes(web3.utils.soliditySha3(sessionID)), token: web3.utils.hexToBytes(tokenAddress), amount: 1000};
-    // Verify the payload if necessary (i.e. when possibly incomplete or invalid)
-    let errMsg = ProviderRandomHash.verify(payload);
-    if (errMsg)
-        throw Error(errMsg);
-    // Create a new message
-    let message = ProviderRandomHash.create(payload); // or use .fromObject if conversion is necessary
-    // Encode a message to an Uint8Array (browser) or Buffer (node)
-    let buffer = ProviderRandomHash.encode(message).finish().toJSON().data;
-    // console.log("buffer", typeof buffer);
-    let hash = web3.utils.soliditySha3(providerAddress, providerAddress, sessionID, {t: 'uint8', v: 1}, {t: 'bytes', v: web3.utils.bytesToHex(buffer)});
+    let buffer = rlpEncodeProviderRandomHash(web3.utils.soliditySha3(sessionID), tokenAddress, web3.utils.toWei('0.1', 'ether'));
+    let hash = web3.utils.soliditySha3(providerAddress, providerAddress, sessionID, {t: 'uint8', v: 1}, {t: 'bytes', v: buffer});
     let sig = myEcsign(Buffer.from(hash.substr(2), 'hex'), providerPrivateKey);
-    await Session.sendMessage(providerAddress, providerAddress, sessionID, 1, buffer, sig, "0x", "0x", {from: providerAddress});
+    await Session.sendMessage(providerAddress, providerAddress, sessionID, 1, buffer, sig, "0x", {from: providerAddress});
 
     // user send random hash
-    let UserRandomHash = transferPB.lookupType("PacketData.UserRandomHash");
-    payload = {urHash: web3.utils.hexToBytes(web3.utils.soliditySha3(sessionID))};
-    // Verify the payload if necessary (i.e. when possibly incomplete or invalid)
-    errMsg = UserRandomHash.verify(payload);
-    if (errMsg)
-        throw Error(errMsg);
-    // Create a new message
-    message = UserRandomHash.create(payload); // or use .fromObject if conversion is necessary
-    // Encode a message to an Uint8Array (browser) or Buffer (node)
-    buffer = UserRandomHash.encode(message).finish().toJSON().data;
-    // console.log("buffer", typeof buffer);
+    buffer = rlpEncodeUserRandomHash(web3.utils.soliditySha3(sessionID));
     for(let i=0; i<puppetAddrs.length; i++) {
-        let hash = web3.utils.soliditySha3(puppetAddrs[i], providerAddress, sessionID, {t: 'uint8', v: 2}, {t: 'bytes', v: web3.utils.bytesToHex(buffer)});
+        let hash = web3.utils.soliditySha3(puppetAddrs[i], providerAddress, sessionID, {t: 'uint8', v: 2}, {t: 'bytes', v:buffer});
         let sig = myEcsign(Buffer.from(hash.substr(2), 'hex'), puppetPrivates[i]);
-        let addHash = web3.utils.soliditySha3({t: 'bytes32', v: hash}, {t: 'uint256', v: 1000});
+        
         // console.log("add hash", addHash);
-        let tData = await sessionTransfer(channelIDs[i], 1000, 1, 1000, addHash);
         typedData.message.channelID = channelIDs[i];
-        typedData.message.balance = 1000;
+        typedData.message.balance = web3.utils.toWei('0.1', 'ether');
         typedData.message.nonce = 1;
+        let addHash = web3.utils.soliditySha3({t: 'bytes32', v: hash}, {t: 'uint256', v: typedData.message.balance});
         typedData.message.additionalHash = addHash;
         let paySig = myEcsign(signHash(), puppetPrivates[i])
-        let res = await Session.sendMessage(puppetAddrs[i], providerAddress, sessionID, 2, buffer, sig, tData, paySig, {from: puppetAddrs[i]});
-        // console.log(i, '---', res.receipt.status);
-        // console.log("user send hash log", res.receipt.logs[0]);
-        // console.log("user send hash balance", res.receipt.logs[0].args.balance.toNumber());
-        // console.log("user send hash nonce", res.receipt.logs[0].args.nonce.toNumber());
-        // console.log("user send hash amount", res.receipt.logs[0].args.amount.toNumber());
+        let tData = await rlpEncodePayment(channelIDs[i], web3.utils.toHex(typedData.message.balance), 1, web3.utils.toHex(typedData.message.balance), addHash, paySig);
+        let res = await Session.sendMessage(puppetAddrs[i], providerAddress, sessionID, 2, buffer, sig, tData, {from: puppetAddrs[i]});
     }
 
     // UserHashReady
-    let UserHashReady = transferPB.lookupType("PacketData.UserHashReady");
-    payload = {user1: web3.utils.hexToBytes(puppetAddrs[0]), user2: web3.utils.hexToBytes(puppetAddrs[1]), user3: web3.utils.hexToBytes(puppetAddrs[2]), user4: web3.utils.hexToBytes(puppetAddrs[3]), user5: web3.utils.hexToBytes(puppetAddrs[4])};
-    // Verify the payload if necessary (i.e. when possibly incomplete or invalid)
-    errMsg = UserHashReady.verify(payload);
-    if (errMsg)
-        throw Error(errMsg);
-    // Create a new message
-    message = UserHashReady.create(payload); // or use .fromObject if conversion is necessary
-    // Encode a message to an Uint8Array (browser) or Buffer (node)
-    buffer = UserHashReady.encode(message).finish().toJSON().data;
-    hash = web3.utils.soliditySha3(providerAddress, providerAddress, sessionID, {t: 'uint8', v: 3}, {t: 'bytes', v: web3.utils.bytesToHex(buffer)});
+    buffer = rlpEncodeUserHashReady(puppetAddrs[0], puppetAddrs[1], puppetAddrs[2], puppetAddrs[3], puppetAddrs[4]);
+    hash = web3.utils.soliditySha3(providerAddress, providerAddress, sessionID, {t: 'uint8', v: 3}, {t: 'bytes', v: buffer});
     sig = myEcsign(Buffer.from(hash.substr(2), 'hex'), providerPrivateKey);
-    await Session.sendMessage(providerAddress, providerAddress, sessionID, 3, buffer, sig, "0x", "0x", {from: providerAddress});
+    await Session.sendMessage(providerAddress, providerAddress, sessionID, 3, buffer, sig, "0x", {from: providerAddress});
 
     // // UserRevealRandom
     // let UserRevealRandom = transferPB.lookupType("PacketData.UserRevealRandom");
@@ -267,20 +268,20 @@ contract('Session', (accounts) => {
     // Provider cancel
     hash = web3.utils.soliditySha3(providerAddress, providerAddress, sessionID, {t: 'uint8', v: 6}, '0x');
     sig = myEcsign(Buffer.from(hash.substr(2), 'hex'), providerPrivateKey);
-    await Session.sendMessage(providerAddress, providerAddress, sessionID, 6, '0x', sig, "0x", "0x", {from: providerAddress});
+    await Session.sendMessage(providerAddress, providerAddress, sessionID, 6, '0x', sig, "0x", {from: providerAddress});
 
     // Provider refund
     for(let i=0; i<puppetAddrs.length; i++) {
         let hash = web3.utils.soliditySha3(providerAddress, puppetAddrs[i], sessionID, {t: 'uint8', v: 7}, '0x');
         let sig = myEcsign(Buffer.from(hash.substr(2), 'hex'), providerPrivateKey);
-        let addHash = web3.utils.soliditySha3({t: 'bytes32', v: hash}, {t: 'uint256', v: 196});
-        let tData = await sessionTransfer(channelIDs[i], 196, 2, 196, addHash);
-        typedData.message.balance = 196;
+        typedData.message.balance = web3.utils.toWei('0.01', 'ether');
+        let addHash = web3.utils.soliditySha3({t: 'bytes32', v: hash}, {t: 'uint256', v: typedData.message.balance});
         typedData.message.channelID = channelIDs[i];
         typedData.message.additionalHash = addHash;
         typedData.message.nonce = 2;
         let paySig = myEcsign(signHash(), providerPrivateKey)
-        await Session.sendMessage(providerAddress, puppetAddrs[i], sessionID, 7, '0x', sig, tData, paySig, {from: providerAddress});
+        let tData = await rlpEncodePayment(channelIDs[i], web3.utils.toHex(typedData.message.balance), 2, web3.utils.toHex(typedData.message.balance), addHash, paySig);
+        await Session.sendMessage(providerAddress, puppetAddrs[i], sessionID, 7, '0x', sig, tData, {from: providerAddress});
     }
 
 

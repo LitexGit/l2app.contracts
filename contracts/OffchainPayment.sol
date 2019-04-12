@@ -342,7 +342,7 @@ contract OffchainPayment {
         channel.providerBalance += arrearBalanceProofMap[channelID].balance - balanceProof.balance;
         require(amount == feeProof.amount + feeRateMap[token]*(arrearBalanceProofMap[channelID].balance - balanceProof.balance)/10000, "invalid fee");
         paymentNetworkMap[token].providerBalance -= amount - feeProof.amount;
-        channel.userBalance -= arrearBalanceProofMap[channelID].balance - balanceProof.balance;
+        //channel.userBalance -= arrearBalanceProofMap[channelID].balance - balanceProof.balance;
         balanceProof.balance = arrearBalanceProofMap[channelID].balance;
         balanceProof.nonce = arrearBalanceProofMap[channelID].nonce;
         balanceProof.additionalHash = arrearBalanceProofMap[channelID].additionalHash;

@@ -208,7 +208,6 @@ contract('Session', (accounts) => {
         signature = myEcsign(Buffer.from(messageHash.substr(2), 'hex'), regulatorPrivateKey);
         await OffchainPayment.confirmRebalance(messageHash, signature, {from: regulatorAddress});
     }
-    let transferPB = await protobuf.load("/Users/vincent/Develop/l2ContractTruffle/test/packet.proto");
 
     // provider send hash random
     // let ProviderRandomHash = transferPB.lookupType("PacketData.ProviderRandomHash");
@@ -261,16 +260,6 @@ contract('Session', (accounts) => {
     }
 
     // UserHashReady
-    // let UserHashReady = transferPB.lookupType("PacketData.UserHashReady");
-    // payload = {user1: web3.utils.hexToBytes(puppetAddrs[0]), user2: web3.utils.hexToBytes(puppetAddrs[1]), user3: web3.utils.hexToBytes(puppetAddrs[2]), user4: web3.utils.hexToBytes(puppetAddrs[3]), user5: web3.utils.hexToBytes(puppetAddrs[4])};
-    // // Verify the payload if necessary (i.e. when possibly incomplete or invalid)
-    // errMsg = UserHashReady.verify(payload);
-    // if (errMsg)
-    //     throw Error(errMsg);
-    // // Create a new message
-    // message = UserHashReady.create(payload); // or use .fromObject if conversion is necessary
-    // // Encode a message to an Uint8Array (browser) or Buffer (node)
-    // buffer = UserHashReady.encode(message).finish().toJSON().data;
     buffer = rlpEncodeUserHashReady(puppetAddrs[0], puppetAddrs[1], puppetAddrs[2], puppetAddrs[3], puppetAddrs[4]);
     hash = web3.utils.soliditySha3(providerAddress, providerAddress, sessionID, {t: 'uint8', v: 3}, {t: 'bytes', v: buffer});
     sig = myEcsign(Buffer.from(hash.substr(2), 'hex'), providerPrivateKey);

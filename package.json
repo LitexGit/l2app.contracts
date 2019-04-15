@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@cryptape/cita-sdk": "^0.21.2",
+    "bn.js": "^4.11.8",
     "ethereumjs-tx": "^1.3.7",
     "ethereumjs-util": "^6.1.0",
     "google-protobuf": "^3.7.1",

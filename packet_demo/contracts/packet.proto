@@ -1,0 +1,46 @@
+syntax = "proto3";
+// package name is used for both generated .sol file name and library name
+package PacketData;
+
+import "google/protobuf/descriptor.proto";
+extend google.protobuf.FieldOptions {
+    string soltype = 8888;  // must > 1001 and not conflict with other extensions
+}
+
+// mType=1
+message ProviderRandomHash {
+    bytes prHash = 1 [ (soltype) = "bytes32" ];
+    // td
+    bytes token = 2 [ (soltype) = "address" ];
+    bytes amount = 3 [ (soltype) = "uint256" ];
+}
+// mType=2
+message UserRandomHash {
+    // bytes user = 1 [ (soltype) = "address" ];
+    bytes urHash = 1 [ (soltype) = "bytes32" ];
+}
+// mType=3
+message UserHashReady {
+    bytes user1 = 1 [ (soltype) = "address" ];
+    bytes user2 = 2 [ (soltype) = "address" ];
+    bytes user3 = 3 [ (soltype) = "address" ];
+    bytes user4 = 4 [ (soltype) = "address" ];
+    bytes user5 = 5 [ (soltype) = "address" ];
+}
+// mType=4
+message UserRevealRandom {
+    // bytes user = 1 [ (soltype) = "address" ];
+    bytes uRandom = 1 [ (soltype) = "bytes32" ];
+}
+// mType=5
+message ProviderSettle {
+    bytes pRandom = 1 [ (soltype) = "bytes32" ];
+}
+// mType=6
+// message CancelSession {}
+// mType=7
+// message Refund {}
+
+
+
+

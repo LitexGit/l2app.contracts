@@ -385,6 +385,7 @@ contract OnchainPayment {
         } else {
             ERC20(token).safeTransfer(provider, amount);
         }
+        require(int256(amount) <= providerBalance[token], "security");
         emit ProviderWithdraw (
             token,
             withdraw,
@@ -454,6 +455,7 @@ contract OnchainPayment {
         require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invalid regulator signature");
 
         uint256 payout = safeAdd(balance, channel.withdraw);
+        require(int256(payout) <= providerBalance[channel.token], "security");
         if (payout >= channel.deposit) {
             providerRegainMap[channel.token] -= int256(payout - channel.deposit);
             providerBalance[channel.token] -= int256(payout - channel.deposit);

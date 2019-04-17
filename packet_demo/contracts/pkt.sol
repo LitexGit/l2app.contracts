@@ -223,7 +223,7 @@ contract PacketToken is StandardToken {
   string public name = "PacketToken";
   string public symbol = "PKT";
   uint8 public decimals = 18;
-  uint INITIAL_SUPPLY = 10*10**8; // 1 billion tokens
+  uint INITIAL_SUPPLY = 10*10**8; // 2 billion tokens
 
   constructor() public {
     totalSupply_ = INITIAL_SUPPLY*10**uint256(decimals);

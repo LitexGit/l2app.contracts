@@ -8,7 +8,7 @@ var Tx = require('ethereumjs-tx');
 
 const privateKey = "0xDDC1738AC05989633A43A49FB8B9FBE77970CCA9F85921768C2BD8FABBFB2E55";
 
-const web3 = new Web3(Web3.givenProvider || 'http://54.250.21.165:8545');
+const web3 = new Web3(Web3.givenProvider || 'http://39.96.8.192:8545');
 const account = web3.eth.accounts.privateKeyToAccount(privateKey) // create account by private key from config
 
 web3.eth.accounts.wallet.add(account) // add account to cita
@@ -70,6 +70,7 @@ async function executeTransaction(bytecodeWithParam, nonce){
       web3.eth.sendSignedTransaction('0x' + serializedTx.toString('hex')).on('receipt', function(receipt){console.log(receipt.contractAddress)});
 }
 
+//web3.eth.isSyncing().then(console.log);
 
 //console.log("start");
 deploy();

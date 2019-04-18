@@ -14,7 +14,7 @@ const {
     // chain: 'https://node.cryptape.com',
   // chain: 'http://13.113.50.143:1337',
   // chain: 'http://121.196.200.225:1337',
-    chain: 'http://wallet.milewan.com:8090',
+    chain: 'http://18.179.21.124:8090',
     privateKey: '0xDDC1738AC05989633A43A49FB8B9FBE77970CCA9F85921768C2BD8FABBFB2E55',
   }
   

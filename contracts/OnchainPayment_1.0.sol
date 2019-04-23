@@ -7,10 +7,9 @@ contract OnchainPayment {
     using SafeERC20 for ERC20;
 
     /**
-    States
+     *  States
      */
 
-    string public constant version = "1.0.0";
     address public regulator;
     address public provider;
     // tokenAddress => providerBalance
@@ -23,10 +22,8 @@ contract OnchainPayment {
     mapping (address => int256) public providerRegainMap;
     // tokenAddress => regulatorWithdraw
     mapping (address => uint256) public regulatorWithdrawMap;
-
     // user => puppet => status(0=not exist, 1=enabled, 2=disabled)
     mapping (address => mapping (address => uint8)) public puppetMap;
-
     // channel counter
     uint256 public counter;
     // user => tokenAddress => counter
@@ -42,38 +39,21 @@ contract OnchainPayment {
         address user;
         bool isCloser;
         uint256 settleBlock;
-
-        // // 0 = eth
-        // // 1 = erc20
-        // uint8 tokenType;
-
         // 0x0 if eth channel
         address token;
         uint256 deposit;
         uint256 withdraw;
-
         // balance proof
         uint256 userBalance;
         uint256 userNonce;
         uint256 providerBalance;
         uint256 providerNonce;
-
         // rebalance data
         uint256 inAmount;
         uint256 inNonce;
     }
-
     uint256 public settleWindowMin;
     uint256 public settleWindowMax;
-
-    // proxy data
-    bool internal initialized;
-    mapping(bytes32 => uint256) internal uintStorage;
-    mapping(bytes32 => int256) internal intStorage;
-    mapping(bytes32 => bool) internal boolStorage;
-    mapping(bytes32 => address) internal addressStorage;
-    mapping(bytes32 => string) internal stringStorage;
-    mapping(bytes32 => bytes) internal bytesStorage;
 
     // EIP712
     bytes32 public DOMAIN_SEPERATOR;
@@ -85,31 +65,7 @@ contract OnchainPayment {
     );
 
     /**
-    Initializer
-     */
-
-    // function initializer (
-    //     address _regulator,
-    //     address _provider,
-    //     uint256 _settleWindowMin,
-    //     uint256 _settleWindowMax
-    // )
-    //     public
-    // {
-    //     require(!initialized, "only initialize once");
-    //     require(_settleWindowMin > 0, "invalid settle window min");
-    //     require(_settleWindowMax > _settleWindowMin, "invalid settle window max");
-
-    //     regulator = _regulator;
-    //     provider = _provider;
-    //     settleWindowMin = _settleWindowMin;
-    //     settleWindowMax = _settleWindowMax;
-
-    //     initialized = true;
-    // }
-
-    /**
-    Constructor
+     *  Constructor
      */
 
     constructor (
@@ -123,12 +79,10 @@ contract OnchainPayment {
     {
         require(_settleWindowMin > 0);
         require(_settleWindowMax > _settleWindowMin);
-
         regulator = _regulator;
         provider = _provider;
         settleWindowMin = _settleWindowMin;
         settleWindowMax = _settleWindowMax;
-
         DOMAIN_SEPERATOR =  keccak256(
             abi.encode(
                 EIP712DOMAIN_TYPEHASH,
@@ -140,31 +94,28 @@ contract OnchainPayment {
     }
 
     /**
-    Modifiers
+     *  Modifiers
      */
 
     modifier isChannelOpened (bytes32 channelID) {
         require(channels[channelID].status == 1, "channel should be open");
         _;
     }
-
     modifier isChannelClosed (bytes32 channelID) {
         require(channels[channelID].status == 2, "channel should be closed");
         _;
     }
-
     modifier validSettleWindow (uint256 settleWindow) {
         require(settleWindow <= settleWindowMax && settleWindow >= settleWindowMin, "invalid settleWindow");
         _;
     }
-
     modifier commitBlockValid (uint256 lastCommitBlock) {
         require(block.number <= lastCommitBlock, "commit block expired");
         _;
     }
 
     /**
-    Public Functions
+     *  Public Functions
      */
 
     function openChannel (
@@ -385,7 +336,7 @@ contract OnchainPayment {
         } else {
             ERC20(token).safeTransfer(provider, amount);
         }
-        require(int256(amount) <= providerBalance[token], "security");
+        require(int256(amount) <= providerBalance[token]);
         emit ProviderWithdraw (
             token,
             withdraw,
@@ -455,7 +406,7 @@ contract OnchainPayment {
         require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invalid regulator signature");
 
         uint256 payout = safeAdd(balance, channel.withdraw);
-        require(int256(payout) <= providerBalance[channel.token], "security");
+        require(int256(payout) <= providerBalance[channel.token]);
         if (payout >= channel.deposit) {
             providerRegainMap[channel.token] -= int256(payout - channel.deposit);
             providerBalance[channel.token] -= int256(payout - channel.deposit);
@@ -686,7 +637,7 @@ contract OnchainPayment {
     }
 
     /**
-    Events
+     *  Events
      */
 
     event ChannelOpened (
@@ -784,14 +735,13 @@ contract OnchainPayment {
     );
 
     /**
-        Internal Methods
+     *  Internal Methods
      */
 
-        /**
+    /**
      * @dev Calculate typed hash of given data (compare eth_signTypedData).
      * @return Hash of given data.
      */
-
     function transferHash(
         bytes32 channelID,
         uint256 balance,
@@ -810,7 +760,6 @@ contract OnchainPayment {
                 nonce,
                 additionalHash)
         );
-
         return keccak256(
             abi.encodePacked(
             "\x19\x01",
@@ -877,15 +826,6 @@ contract OnchainPayment {
         view
         returns (address)
     {
-        // bytes32 messageHash = keccak256(
-        //     abi.encodePacked(
-        //         address(this),
-        //         channelID,
-        //         balance,
-        //         nonce,
-        //         additionalHash
-        //     )
-        // );
         bytes32 messageHash = transferHash(
             channelID,
             balance,

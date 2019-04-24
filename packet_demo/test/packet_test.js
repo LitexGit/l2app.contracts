@@ -1,5 +1,7 @@
 const ethUtil = require('ethereumjs-util');
 var PacketVerify = artifacts.require("PacketVerify");
+var Debug = artifacts.require("Debug");
+var RLP = require('rlp');
 // const abi = require('ethereumjs-abi');
 // var protobuf = require("protobufjs");
 // protobuf.common('google/protobuf/descriptor.proto', {})
@@ -64,7 +66,16 @@ contract('Session', (accounts) => {
     let res = await instance.verify.call(rlpedData.appchainData);
     //assert.equal(res.toNumber(), 3001, "error: verify cancel data failed");
     console.log('res', res.toNumber());
+
+    res = await instance.testRlp.call(rlpedData.appchainData);
+    console.log("msmsmsmsmsmsmsms", res);
     // let res = await instance.verify(rlpedData);
     // console.log('res', res.receipt.logs[0]);
+  })
+
+  it("debug", async()=>{
+    let debug = await Debug.new();
+    let res = await debug.decodePHR.call("0xf86994339c45ddfefd081b243ff6ff2963b59439bc353a94c5ec24a393ad6b3aaf5da2f6d1792cfc9a870b579492888bf647ace96533598db8cffd8aa0bd035b5f94a6a36c17cfa6d86697d693f9d33cbd62c969e942948717e66177bba25a14697e32c097b26b01accdcf");
+    console.log("debug", res);
   })
 });

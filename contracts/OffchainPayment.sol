@@ -35,6 +35,8 @@ contract OffchainPayment {
         int256 providerOnchainBalance;
     }
 
+    // user => token => channelID
+    mapping (address => mapping(address => bytes32)) public channelIDMap;
     // channelID => Channel
     mapping (bytes32 => Channel) public channelMap;
     // channelID => ClosingChannel
@@ -702,7 +704,7 @@ contract OffchainPayment {
         PaymentNetwork storage paymentNetwork = paymentNetworkMap[token];
         paymentNetwork.userCount = paymentNetwork.userCount + 1;
         paymentNetwork.userTotalDeposit = paymentNetwork.userTotalDeposit + amount;
-
+        channelIDMap[user][token] = channelID;
         emit OnchainOpenChannel (
             user,
             token,

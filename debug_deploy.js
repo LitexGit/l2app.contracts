@@ -1,7 +1,7 @@
 const Web3 = require('web3');
 //Factory.json file contains my compiled Factory.sol file
-const OnchainPayment = require('./build/contracts/OnchainPayment.json');
-const constructArgs = ['0x4Aa670bCe722B9698A670afc968b1dE5f1553df9', '0xa08105d7650Fe007978a291CcFECbB321fC21ffe', 1, 9, 4];
+const OnchainPayment = require('./build/contracts/Etherscan.json');
+const constructArgs = [];
 
 
 var Tx = require('ethereumjs-tx');
@@ -23,14 +23,11 @@ const deploy = async () => {
 
 
     //console.log('Attempting to deploy from account: ', address);
-    const MyContract = new web3.eth.Contract(OnchainPayment.abi);
+    //const MyContract = new web3.eth.Contract(OnchainPayment.abi);
     // console.log("MyContract is ", MyContract);
 
 
-    const bytecodeWithParam = await MyContract.deploy({
-      data: OnchainPayment.bytecode,
-      arguments: constructArgs,
-    }).encodeABI();   // console.log("abi is ", result);
+    const bytecodeWithParam = OnchainPayment.bytecode;
 
     const nonce = await web3.eth.getTransactionCount(address);
     await executeTransaction(bytecodeWithParam, nonce);

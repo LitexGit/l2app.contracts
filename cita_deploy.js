@@ -8,14 +8,14 @@ const {
 } = require('./build/contracts/OffchainPayment.json')
 // } = require('./cita_compiled.js');
 
-let constructArgs = [process.argv[2], '0xa08105d7650Fe007978a291CcFECbB321fC21ffe', '0x4Aa670bCe722B9698A670afc968b1dE5f1553df9', process.argv[3],
+let constructArgs = ["0x8ea85d87d62d79ce11e420cf1e9d9f31d9b5c5b8", '0xa08105d7650Fe007978a291CcFECbB321fC21ffe', '0x4Aa670bCe722B9698A670afc968b1dE5f1553df9', "0xA214041fFDE8c9b8623aBD6216F13fb2ED809DB6",
 4];
 
 let config = {
   // chain: 'https://node.cryptape.com',
 // chain: 'http://13.113.50.143:1337',
 // chain: 'http://121.196.200.225:1337',
-  chain: 'http://18.179.21.124:8090',
+  chain: 'http://54.64.76.19:1337',
   privateKey: '0xDDC1738AC05989633A43A49FB8B9FBE77970CCA9F85921768C2BD8FABBFB2E55',
 }
 

@@ -1,0 +1,14 @@
+{
+    "rinkeby": {
+        "provider": "http://39.96.8.192:8545",
+        "privateKey": "0xDDC1738AC05989633A43A49FB8B9FBE77970CCA9F85921768C2BD8FABBFB2E55"
+    },
+    "mainnet": {
+        "provider": "",
+        "privateKey": ""
+    },
+    "cita": {
+        "provider": "http://54.64.76.19:1337",
+        "privateKey": "0xDDC1738AC05989633A43A49FB8B9FBE77970CCA9F85921768C2BD8FABBFB2E55"
+    }
+}

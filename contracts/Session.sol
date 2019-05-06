@@ -2,7 +2,6 @@ pragma solidity >=0.4.24 <0.6.0;
 pragma experimental ABIEncoderV2;
 
 import "./lib/ECDSA.sol";
-import "./lib/TransferData.sol";
 import "./lib/RLPReader.sol";
 
 contract OCPInterface {

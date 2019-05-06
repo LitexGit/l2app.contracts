@@ -6,14 +6,12 @@ import "./lib/ERC20.sol";
 contract OnchainPayment {
     using SafeERC20 for ERC20;
 
-    /**
-     *  States
-     */
+    /* States */
 
     address public regulator;
     address public provider;
     // tokenAddress => providerBalance
-    mapping (address => int256) public providerBalance;
+    mapping (address => int256) public providerBalanceMap;
     // tokenAddress => providerDeposit
     mapping (address => uint256) public providerDepositMap;
     // tokenAddress => providerWithdraw
@@ -22,15 +20,12 @@ contract OnchainPayment {
     mapping (address => int256) public providerRegainMap;
     // tokenAddress => regulatorWithdraw
     mapping (address => uint256) public regulatorWithdrawMap;
-    // user => puppet => status(0=not exist, 1=enabled, 2=disabled)
-    mapping (address => mapping (address => uint8)) public puppetMap;
     // channel counter
     uint256 public counter;
     // user => tokenAddress => counter
-    mapping (address => mapping (address => uint256)) public channelCounter;
+    mapping (address => mapping (address => uint256)) public channelCounterMap;
     // channelID => channel
-    mapping (bytes32 => Channel) public channels;
-
+    mapping (bytes32 => Channel) public channelMap;
     struct Channel {
         // 0 = not-exist or settled
         // 1 = open
@@ -54,6 +49,8 @@ contract OnchainPayment {
     }
     uint256 public settleWindowMin;
     uint256 public settleWindowMax;
+    // user => puppet => status(0=not exist, 1=enabled, 2=disabled)
+    mapping (address => mapping (address => uint8)) public puppetMap;
 
     // EIP712
     bytes32 public DOMAIN_SEPERATOR;
@@ -64,9 +61,7 @@ contract OnchainPayment {
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
     );
 
-    /**
-     *  Constructor
-     */
+    /* Constructor */
 
     constructor (
         address _regulator,
@@ -93,16 +88,14 @@ contract OnchainPayment {
         );
     }
 
-    /**
-     *  Modifiers
-     */
+    // Modifiers
 
     modifier isChannelOpened (bytes32 channelID) {
-        require(channels[channelID].status == 1, "channel should be open");
+        require(channelMap[channelID].status == 1, "channel should be open");
         _;
     }
     modifier isChannelClosed (bytes32 channelID) {
-        require(channels[channelID].status == 2, "channel should be closed");
+        require(channelMap[channelID].status == 2, "channel should be closed");
         _;
     }
     modifier validSettleWindow (uint256 settleWindow) {
@@ -114,9 +107,7 @@ contract OnchainPayment {
         _;
     }
 
-    /**
-     *  Public Functions
-     */
+    /* Public Functions */
 
     function openChannel (
         address user,
@@ -129,29 +120,19 @@ contract OnchainPayment {
         payable
         validSettleWindow (settleWindow)
     {
-        require (channelCounter[user][token] == 0, "channel already exists");
+        require (channelCounterMap[user][token] == 0, "channel already exists");
         counter += 1;
-        channelCounter[user][token] = counter;
+        channelCounterMap[user][token] = counter;
         bytes32 channelID = getChannelID (user, token);
-        Channel storage channel = channels[channelID];
+        Channel storage channel = channelMap[channelID];
         if (msg.sender == provider) {
+            require(puppet == address(0x0), "provider should not set puppet");
             channel.status = 1;
             channel.user = user;
             channel.token = token;
             channel.settleBlock = settleWindow;
-
-            emit ChannelOpened (
-                msg.sender,
-                user,
-                token,
-                address(0x0),
-                0,
-                settleWindow,
-                channelID
-            );
         } else {
-            require(msg.sender == user, "msg.sender should be userself");
-
+            require(msg.sender == user, "msg.sender should be user");
             if (puppet != address(0x0)) {
                 puppetMap[user][puppet] = 1;
             }
@@ -163,21 +144,21 @@ contract OnchainPayment {
             if (token == address(0x0)) {
                 require(msg.value > 0, "user should deposit eth");
                 channel.deposit = msg.value;
-            } else { //open token channel
+            } else { // open token channel
                 require(amount > 0, "user should deposit token");
                 ERC20(token).safeTransferFrom(user, address(this), amount);
                 channel.deposit = amount;
             }
-            emit ChannelOpened (
-                msg.sender,
-                user,
-                token,
-                puppet,
-                channel.deposit,
-                settleWindow,
-                channelID
-            );
         }
+        emit ChannelOpened (
+            msg.sender,
+            user,
+            token,
+            puppet,
+            channel.deposit,
+            settleWindow,
+            channelID
+        );
     }
 
     function addPuppet (
@@ -212,12 +193,12 @@ contract OnchainPayment {
         payable
         isChannelOpened(channelID)
     {
-        Channel storage channel = channels[channelID];
+        Channel storage channel = channelMap[channelID];
         if (channel.token == address(0x0)) {
             require(msg.value > 0, "invalid deposit");
             channel.deposit += msg.value;
             emit UserNewDeposit (
-                msg.sender,
+                channel.user,
                 channelID,
                 msg.value,
                 channel.deposit
@@ -244,22 +225,22 @@ contract OnchainPayment {
     {
         if (token == address(0x0)) {
             require(msg.value > 0, "invalid deposit");
-            providerBalance[token] += int256(msg.value);
+            providerBalanceMap[token] += int256(msg.value);
             providerDepositMap[token] += msg.value;
             emit ProviderNewDeposit (
                 token,
                 msg.value,
-                providerBalance[token]
+                providerBalanceMap[token]
             );
         } else {
             require(amount > 0, "invalid deposit");
             ERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-            providerBalance[token] += int256(amount);
+            providerBalanceMap[token] += int256(amount);
             providerDepositMap[token] += amount;
             emit ProviderNewDeposit (
                 token,
                 amount,
-                providerBalance[token]
+                providerBalanceMap[token]
             );
         }
     }
@@ -286,19 +267,16 @@ contract OnchainPayment {
         );
         require(ECDSA.recover(messageHash, providerSignature) == provider, "invalid provider signature");
         require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invalid regulator signature");
-
-        Channel storage channel = channels[channelID];
+        Channel storage channel = channelMap[channelID];
         require(msg.sender == channel.user, "msg.sender should be user");
         require(channel.withdraw < withdraw, "invalid withdraw");
         uint256 amount = withdraw - channel.withdraw;
         channel.withdraw = withdraw;
-
         if (channel.token == address(0x0)) {
             address(receiver).transfer(amount);
         } else {
             ERC20(channel.token).safeTransfer(receiver, amount);
         }
-
         emit UserWithdraw (
             msg.sender,
             channelID,
@@ -327,20 +305,20 @@ contract OnchainPayment {
             )
         );
         require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invaild regulator signature");
-        // require(balance < providerBalance[token], "invalid withdraw");
         uint256 withdraw = amount - providerWithdrawMap[token];
-        providerBalance[token] -= int256(withdraw);
+        providerBalanceMap[token] -= int256(withdraw);
         providerWithdrawMap[token] = amount;
         if (token == address(0x0)) {
             address(provider).transfer(amount);
         } else {
             ERC20(token).safeTransfer(provider, amount);
         }
-        require(int256(amount) <= providerBalance[token]);
+        // bug
+        require(int256(withdraw) <= providerBalanceMap[token]);
         emit ProviderWithdraw (
             token,
             withdraw,
-            providerBalance[token],
+            providerBalanceMap[token],
             lastCommitBlock
         );
     }
@@ -370,7 +348,7 @@ contract OnchainPayment {
         } else {
             ERC20(token).safeTransfer(regulator, withdrawAmount);
         }
-        providerBalance[token] -= int256(withdrawAmount);
+        providerBalanceMap[token] -= int256(withdrawAmount);
         emit RegulatorWithdraw (
             token,
             withdrawAmount,
@@ -387,12 +365,11 @@ contract OnchainPayment {
         bytes memory regulatorSignature
     )
         public
-        isChannelOpened(channelID)
         commitBlockValid(lastCommitBlock)
     {
-        Channel storage channel = channels[channelID]; 
+        Channel storage channel = channelMap[channelID]; 
+        require(channel.status == 1, "channel should be open");
         require(msg.sender == channel.user, "only user can trigger");
-
         bytes32 messageHash = keccak256(
             abi.encodePacked(
                 address(this),
@@ -401,37 +378,38 @@ contract OnchainPayment {
                 lastCommitBlock
             ) 
         );
-
         require(ECDSA.recover(messageHash, providerSignature) == provider, "invalid provider signature");
         require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invalid regulator signature");
-
         uint256 payout = safeAdd(balance, channel.withdraw);
-        require(int256(payout) <= providerBalance[channel.token]);
+        // bug
+        require(int256(payout) <= providerBalanceMap[channel.token]);
         if (payout >= channel.deposit) {
             providerRegainMap[channel.token] -= int256(payout - channel.deposit);
-            providerBalance[channel.token] -= int256(payout - channel.deposit);
+            providerBalanceMap[channel.token] -= int256(payout - channel.deposit);
         } else {
             providerRegainMap[channel.token] += int256(channel.deposit - payout);
-            providerBalance[channel.token] += int256(channel.deposit - payout);
-        }      
+            providerBalanceMap[channel.token] += int256(channel.deposit - payout);
+        }    
+        address user = channel.user;
+        address token = channel.token;
+        // reuse var
 
-        if (channel.token == address(0)) {
-            address(channel.user).transfer(balance);
+        int256 regain = int256(channel.deposit) - int256(payout);
+        delete channelCounterMap[channel.user][channel.token];
+        delete channelMap[channelID];  
+        if (token == address(0)) {
+            address(user).transfer(balance);
         } else {
-            ERC20(channel.token).safeTransfer(channel.user, balance);
+            ERC20(token).safeTransfer(user, balance);
         }
-
         emit CooperativeSettled (
-            channel.user,
+            user,
             channelID,
-            channel.token, 
+            token, 
             balance,
-            int256(channel.deposit - payout),
+            regain,
             lastCommitBlock
         );
-
-        delete channelCounter[channel.user][channel.token];
-        delete channels[channelID];
     }
 
     function closeChannel (
@@ -454,7 +432,6 @@ contract OnchainPayment {
             additionalHash,
             partnerSignature
         );
-
         updateRebalanceProof (
             channelID,
             inAmount,
@@ -462,7 +439,6 @@ contract OnchainPayment {
             regulatorSignature,
             providerSignature
         );
-
         emit ChannelClosed (
             channelID,
             balance,
@@ -482,10 +458,9 @@ contract OnchainPayment {
     )
         public
     {
-        Channel storage channel = channels[channelID];
+        Channel storage channel = channelMap[channelID];
         require(channel.status == 2, "channel should be closed");
         require(block.number <= channel.settleBlock, "commit block expired");
-
         bytes32 messageHash = keccak256(
             abi.encodePacked(
                 address(this),
@@ -504,7 +479,6 @@ contract OnchainPayment {
             additionalHash,
             partnerSignature
         );
-
         if (channel.isCloser) {
             require(recoveredPartner == channel.user, "invalid partner signature");
             require(recoveredConsignor == provider, "invalid consignor signature");
@@ -520,7 +494,6 @@ contract OnchainPayment {
                 channel.providerBalance = balance;
             }
         }
-
         emit PartnerUpdateProof (
             channelID,
             channel.userBalance,
@@ -540,9 +513,8 @@ contract OnchainPayment {
         public
         isChannelClosed (channelID)
     {
-        Channel storage channel = channels[channelID];
+        Channel storage channel = channelMap[channelID];
         require(block.number <= channel.settleBlock, "commit block expired");
-
         updateRebalanceProof (
             channelID,
             inAmount,
@@ -550,7 +522,6 @@ contract OnchainPayment {
             regulatorSignature,
             inProviderSignature
         );
-
         emit RegulatorUpdateProof (
             channelID,
             channel.inAmount,
@@ -564,14 +535,12 @@ contract OnchainPayment {
         public
         isChannelClosed(channelID)
     {
-        Channel storage channel = channels[channelID];
+        Channel storage channel = channelMap[channelID];
         require(block.number > channel.settleBlock, "settleWindow should be over");
         require(safeAdd(channel.deposit, channel.inAmount) >= channel.withdraw,  "channel balance should be positive");
-        providerBalance[channel.token] -= int256(channel.inAmount);
-
+        providerBalanceMap[channel.token] -= int256(channel.inAmount);
         uint256 userTransferredAmount;
         uint256 providerTransferredAmount;
-
         uint256 margin;
         uint256 min;
         (
@@ -581,7 +550,6 @@ contract OnchainPayment {
             channel.userBalance,
             channel.providerBalance
         );
-
         if (min == channel.userBalance) {
             providerTransferredAmount = safeSub(channel.inAmount, margin);
             userTransferredAmount = safeSub(safeAdd(channel.deposit, margin), channel.withdraw);
@@ -605,7 +573,6 @@ contract OnchainPayment {
                 int256(margin)
             );
         }
-
         if (userTransferredAmount > 0) {
             if (channel.token == address(0x0)) {
                 address(channel.user).transfer(userTransferredAmount);
@@ -614,10 +581,10 @@ contract OnchainPayment {
             }
         }
         if (providerTransferredAmount > 0) {
-            providerBalance[channel.token] += int256(providerTransferredAmount);
+            providerBalanceMap[channel.token] += int256(providerTransferredAmount);
         }
-        delete channelCounter[channel.user][channel.token];
-        delete channels[channelID];
+        delete channelCounterMap[channel.user][channel.token];
+        delete channelMap[channelID];
     }
 
     function getChannelID (
@@ -629,10 +596,8 @@ contract OnchainPayment {
         returns (bytes32)
     {
         require(user != address(0x0), "invalid input");
-
-        uint256 _counter = channelCounter[user][token];
+        uint256 _counter = channelCounterMap[user][token];
         require(_counter != 0, "channel does not exist");
-
         return keccak256((abi.encodePacked(user, token, _counter)));
     }
 
@@ -649,30 +614,25 @@ contract OnchainPayment {
         uint256 settleWindow,
         bytes32 channelID
     );
-
     event PuppetAdded (
         address indexed user,
         address puppet
     );
-
     event PuppetDisabled (
         address indexed user,
         address puppet
     );
-
     event UserNewDeposit (
         address indexed user,
         bytes32 indexed channelID,
         uint256 newDeposit,
         uint256 totalDeposit
     );
-
     event ProviderNewDeposit (
         address indexed token,
         uint256 amount,
         int256 balance
     );
-
     event UserWithdraw (
         address indexed user,
         bytes32 indexed channelID,
@@ -680,21 +640,18 @@ contract OnchainPayment {
         uint256 totalWithdraw,
         uint256 lastCommitBlock
     );
-
     event ProviderWithdraw (
         address token,
         uint256 amount,
         int256 balance,
         uint256 lastCommitBlock
     );
-
     event RegulatorWithdraw (
         address token,
         uint256 withdrawAmount,
         uint256 feeAmount,
         uint256 feeNonce
     );
-
     event CooperativeSettled (
         address indexed user, 
         bytes32 indexed channelID,
@@ -703,7 +660,6 @@ contract OnchainPayment {
         int256 providerRegain,
         uint256 lastCommitBlock
     );
-
     event ChannelClosed (
         bytes32 indexed channelID,
         uint256 balance,
@@ -711,7 +667,6 @@ contract OnchainPayment {
         uint256 inAmount,
         uint256 inNonce
     );
-
     event PartnerUpdateProof(
         bytes32 indexed channelID,
         uint256 userBalance,
@@ -719,13 +674,11 @@ contract OnchainPayment {
         uint256 providerBalance,
         uint256 providerNonce
     );
-
     event RegulatorUpdateProof (
         bytes32 indexed channelID,
         uint256 inAmount,
         uint256 inNonce
     );
-
     event ChannelSettled(
         address indexed user,
         address indexed token,
@@ -738,10 +691,6 @@ contract OnchainPayment {
      *  Internal Methods
      */
 
-    /**
-     * @dev Calculate typed hash of given data (compare eth_signTypedData).
-     * @return Hash of given data.
-     */
     function transferHash(
         bytes32 channelID,
         uint256 balance,
@@ -777,18 +726,16 @@ contract OnchainPayment {
     )
         internal
     {
-        Channel storage channel = channels[channelID];
+        Channel storage channel = channelMap[channelID];
         require(channel.status == 1, "channel should be open");
         channel.status = 2;
         channel.settleBlock += uint256(block.number);
-
         if (nonce == 0 && balance == 0) {
             if (msg.sender == channel.user) {
                 channel.isCloser = true;
             }
             return;
         }
-
         address recoveredPartner = recoverBalanceSignature (
             channelID,
             balance,
@@ -844,7 +791,7 @@ contract OnchainPayment {
     )
         internal
     {
-        Channel storage channel = channels[channelID];
+        Channel storage channel = channelMap[channelID];
         if (inNonce > channel.inNonce) {
             bytes32 inMessageHash = keccak256(
                 abi.encodePacked(

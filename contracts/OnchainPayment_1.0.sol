@@ -313,7 +313,6 @@ contract OnchainPayment {
         } else {
             ERC20(token).safeTransfer(provider, amount);
         }
-        // bug
         require(int256(withdraw) <= providerBalanceMap[token]);
         emit ProviderWithdraw (
             token,
@@ -381,7 +380,6 @@ contract OnchainPayment {
         require(ECDSA.recover(messageHash, providerSignature) == provider, "invalid provider signature");
         require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invalid regulator signature");
         uint256 payout = safeAdd(balance, channel.withdraw);
-        // bug
         require(int256(payout) <= providerBalanceMap[channel.token]);
         if (payout >= channel.deposit) {
             providerRegainMap[channel.token] -= int256(payout - channel.deposit);
@@ -392,8 +390,6 @@ contract OnchainPayment {
         }    
         address user = channel.user;
         address token = channel.token;
-        // reuse var
-
         int256 regain = int256(channel.deposit) - int256(payout);
         delete channelCounterMap[channel.user][channel.token];
         delete channelMap[channelID];  
@@ -796,6 +792,7 @@ contract OnchainPayment {
             bytes32 inMessageHash = keccak256(
                 abi.encodePacked(
                     address(this),
+                    keccak256(abi.encodePacked("rebalanceIn")),
                     channelID,
                     inAmount,
                     inNonce

@@ -6,26 +6,15 @@ const {
     abi,
     bytecode
   } = require('./build/contracts/Session.json')
-  // } = require('./cita_compiled.js');
   
   let constructArgs = [];
+  let config = require("./conf.json");
+  config = config.cita;
   
-  let config = {
-    // chain: 'https://node.cryptape.com',
-  // chain: 'http://13.113.50.143:1337',
-  // chain: 'http://121.196.200.225:1337',
-    chain: 'http://54.64.76.19:1337',
-    privateKey: '0xDDC1738AC05989633A43A49FB8B9FBE77970CCA9F85921768C2BD8FABBFB2E55',
-  }
-  
-  
-  
-  var cita = CITASDK(config.chain);
+  var cita = CITASDK(config.provider);
   const account = cita.base.accounts.privateKeyToAccount(config.privateKey); // create account by private key from config
   cita.base.accounts.wallet.add(account); // add account to cita
-  
-  let defaultAddress = cita.base.accounts.wallet[0].address;
-  
+    
   let transaction = {
     nonce: 999999,
     quota: 8000000,

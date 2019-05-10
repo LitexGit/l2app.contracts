@@ -18,7 +18,9 @@
     "truffle-privatekey-provider": "^1.1.0",
     "web3": "^1.0.0-beta.48"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "cz-conventional-changelog": "^2.1.0"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -27,5 +29,10 @@
     "url": "git@gitlab.f3m.club:l2/l2-contract.git"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  }
 }

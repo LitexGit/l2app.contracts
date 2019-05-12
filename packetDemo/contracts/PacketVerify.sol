@@ -136,13 +136,16 @@ contract PacketVerify {
         }
         uint256 m = uint256(urHash[0].urr^urHash[1].urr^urHash[2].urr^urHash[3].urr^urHash[4].urr^s.pr)%100 + 100;
         gameInformation = string(abi.encodePacked(gameInformation, ", module: ", uintToString(m)));
+        uint256 minRand = 0;
         for (uint j=0; j<5; j++) {
             uint i = 4 - j;
             urHash[i].m = uint256(urHash[i].urr)%m;
             userModules[i] = urHash[i].m;
             if(i == 4) {
                 s.loser = urHash[i].user;
-            } else if(urHash[i].m<urHash[i+1].m) {
+                minRand = urHash[i].m;
+            } else if(urHash[i].m < minRand) {
+                minRand = urHash[i].m;
                 s.loser = urHash[i].user;
             }
         }
@@ -155,7 +158,7 @@ contract PacketVerify {
                     return (verifyResult, gameInformation, loser, users, userSecretHashs, userSecrets, userModules, userSettleAmounts);
                 }
             } else {
-                if(pSettle[i].amount != ((s.amount*rate/100)*urHash[i].m/(urHash[0].m+urHash[1].m+urHash[2].m+urHash[3].m+urHash[4].m)) + s.amount*rate/100) {
+                if(pSettle[i].amount != ((s.amount*rate/100)*urHash[i].m/(urHash[0].m+urHash[1].m+urHash[2].m+urHash[3].m+urHash[4].m)) + s.amount) {
                     verifyResult = "error(-1007): wrong settle amount\n";
                     return (verifyResult, gameInformation, loser, users, userSecretHashs, userSecrets, userModules, userSettleAmounts);
                 }

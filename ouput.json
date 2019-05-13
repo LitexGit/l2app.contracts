@@ -1,10 +1,10 @@
 {
     "contractAddress": {
-        "session_contractAddress": "0x03cCFC876bda92e12E7Fb922521d451c85ebDB47",
-        "token_contractAddress": "0x1553577F3492C8aA80dDAF6070B7D9EbDF4cD22F",
-        "eth_contractAddress": "0x29e9cde69f9dDBd38F0650257E30589fc6277eB3",
-        "cita_contractAddress": "0x8d35adf90fF87fe5ECf385fA9E37dE32f5b3c29c",
-        "operator_contractAddress": "0x560F6dc8C46d8F6e129790960e628557d9CFC545"
+        "session_contractAddress": "0x7661b75Ebfd4Bf50517C32b8ADFE8FE0bdA666b1",
+        "token_contractAddress": "0x5202A0bF747AAB738C24fD71C048342E74398ef4",
+        "eth_contractAddress": "0xA770c0Efd3348bf15f7EF5AfE973442be5a190Cc",
+        "operator_contractAddress": "0x56e83B351e5EA0f6449fadC92101eA59Ed4e1638",
+        "cita_contractAddress": "0x67D1FDf7a461707268a5B6C1278dAfe0ECF3170d"
     },
     "rinkeby": {
         "provider": "http://39.96.8.192:8545",
@@ -36,10 +36,10 @@
         "required": 1
     },
     "cita_constructArgs": {
-        "onchainPayment": "0x29e9cde69f9dDBd38F0650257E30589fc6277eB3",
+        "onchainPayment": "0xA770c0Efd3348bf15f7EF5AfE973442be5a190Cc",
         "provider": "0x739EA8f1f97eF574D75F91bf7e76AD3a1afB1C63",
         "regulator": "0x521057bece658436d70Fe6DEf9A6ebd6F4e462D7",
-        "operator": "0xA214041fFDE8c9b8623aBD6216F13fb2ED809DB6",
+        "operator": "0x56e83B351e5EA0f6449fadC92101eA59Ed4e1638",
         "chainID": 4
     }
 }

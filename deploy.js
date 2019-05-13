@@ -8,9 +8,13 @@ const session_deploy = require('./session_deploy')
 
 let result = {};
 let onchainPayment;
+let operator;
 session_deploy.deploy()
     .then(res => {
         console.log("session_contractAddress:" + res)
+        if(res == null){
+            res = '';
+        }
         res = {
             "session_contractAddress": res
         };
@@ -21,16 +25,22 @@ session_deploy.deploy()
     })
     .then(res => {
         console.log("token_contractAddress:" + res)
+        if(res == null){
+            res = '';
+        }
         res = {
             "token_contractAddress": res
         };
         result = Object.assign(result, res);
         // result.push(res);
         // console.log("result:"+result)
-        return eth_deploy.deploy() //deploy eth
+        return eth_deploy.deploy(); //deploy eth
     })
     .then(res => {
-        console.log("eth_contractAddress:" + res)
+        console.log("eth_contractAddress:" + res);
+        if(res == null){
+            res = '';
+        }
         onchainPayment = res;
         res = {
             "eth_contractAddress": res
@@ -38,7 +48,24 @@ session_deploy.deploy()
         result = Object.assign(result, res);
         // result.push(res);
         // console.log("result:"+result)
-        return cita_deploy.deploy(onchainPayment) //deploy cita
+        return operator_deploy.deploy() //deploy operator
+    })
+    .then(res => {
+        console.log("operator_contractAddress:" + res)
+        if(res == null){
+            res = '';
+        }
+        operator = res;
+        res = {
+            "operator_contractAddress": res
+        };
+        result = Object.assign(result, res);
+        // console.log("result:" + result)
+        if(onchainPayment != '' && operator != ''){
+            return cita_deploy.deploy(onchainPayment,operator) //deploy cita
+        }else{
+            throw "cita_deploy can't get onchainPayment or operator";
+        }
     })
     .then(res => {
         console.log("cita_contractAddress:" + res)
@@ -47,15 +74,6 @@ session_deploy.deploy()
         };
         result = Object.assign(result, res);
         // console.log("result:"+result)
-        return operator_deploy.deploy() //deploy operator
-    })
-    .then(res => {
-        console.log("operator_contractAddress:" + res)
-        res = {
-            "operator_contractAddress": res
-        };
-        result = Object.assign(result, res);
-        // console.log("result:" + result)
 
         //all contractAddress 
         result = {
@@ -80,6 +98,10 @@ session_deploy.deploy()
                     if(prop == "onchainPayment"){
                         value[prop] = onchainPayment;
                     }
+                    if(prop == "operator"){
+                        value[prop] = operator;
+                    }
+
                 }
                 return value;
             }else{

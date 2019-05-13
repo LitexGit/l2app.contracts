@@ -1,4 +1,4 @@
-const deploy = function (onchainPayment) {
+const deploy = function (onchainPayment,operator) {
   console.log("start cita deploy");
   const {
     default: CITASDK
@@ -17,7 +17,7 @@ const deploy = function (onchainPayment) {
     onchainPayment,
     cita_constructArgs.provider,
     cita_constructArgs.regulator,
-    cita_constructArgs.operator,
+    operator,
     cita_constructArgs.chainID
   ];
 
@@ -82,7 +82,7 @@ const deploy = function (onchainPayment) {
         if (res.errorMessage) throw new Error(res.errorMessage)
         return cita.base.getAbi(_contractAddress, 'pending') //.then(console.log) // get abi from the chain
       })
-      .catch(err =>{console.error(err);reject(err)})
+      .catch(err =>{console.error(err);reject(null)})
   })
 }
 

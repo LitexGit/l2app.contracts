@@ -33,7 +33,7 @@ const deploy = async () => {
   // console.log('transactionHash:', transactionHash);
   let receipt;
   let repeatTime = 0;
-  while (repeatTime++ < 20) {
+  while (repeatTime++ < 40) {
     try {
       receipt = await web3.eth.getTransactionReceipt(transactionHash);
       if (receipt != null) {
@@ -44,7 +44,9 @@ const deploy = async () => {
     }
     await new Promise(resolve => setTimeout(resolve, 2000));
   }
-  return receipt.contractAddress;
+  if(receipt != null){
+    return receipt.contractAddress;
+  }
 };
 
 
@@ -67,7 +69,6 @@ async function executeTransaction(bytecodeWithParam, nonce) {
   // console.log('serializedTx', serializedTx);
 
   return new Promise((resolve, reject) => {
-    let transactionHash;
     web3.eth.sendSignedTransaction('0x' + serializedTx.toString('hex'))
       .on('transactionHash', (transactionHash => {
         resolve(transactionHash)
@@ -75,8 +76,6 @@ async function executeTransaction(bytecodeWithParam, nonce) {
       .on('error', (err) => {
         reject(err);
       });
-
-
   });
 }
 
@@ -86,3 +85,5 @@ async function executeTransaction(bytecodeWithParam, nonce) {
 module.exports = {
   deploy
 }
+
+// deploy();

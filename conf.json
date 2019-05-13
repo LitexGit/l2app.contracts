@@ -30,7 +30,7 @@
         "onchainPayment":"",
         "provider":"0x739EA8f1f97eF574D75F91bf7e76AD3a1afB1C63",
         "regulator":"0x521057bece658436d70Fe6DEf9A6ebd6F4e462D7",
-        "operator":"0xA214041fFDE8c9b8623aBD6216F13fb2ED809DB6",
+        "operator":"",
         "chainID":4
     }
 }

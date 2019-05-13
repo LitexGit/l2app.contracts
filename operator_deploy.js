@@ -83,7 +83,7 @@ const deploy = function () {
       })
       .catch((err) => {
         console.error(err);
-        reject(err);
+        reject(null);
       })
   })
 

@@ -23,19 +23,23 @@ const deploy = async () => {
   // console.log('transactionHash:', transactionHash);
   let receipt;
   let repeatTime = 0;
-  while (repeatTime++ < 20) {
+  while (repeatTime++ < 40) {
     try {
       receipt = await web3.eth.getTransactionReceipt(transactionHash);
+      // console.log(receipt)
       if (receipt != null) {
         break;
       }
     } catch (error) {
-
+      console.err("can't get token receipt")
     }
     await new Promise(resolve => setTimeout(resolve, 2000));
   }
-  // console.log(receipt.contractAddress);
-  return receipt.contractAddress;
+  // console.log("receipt:"+receipt);
+  // console.log("receipt.contractAddress:"+receipt.contractAddress);
+  if(receipt != null){
+    return receipt.contractAddress;
+  }
 };
 
 async function executeTransaction(bytecodeWithParam, nonce) {
@@ -43,7 +47,7 @@ async function executeTransaction(bytecodeWithParam, nonce) {
     "from": account.address,
     "nonce": "0x" + nonce.toString(16),
     "gasPrice": web3.utils.toHex(5 * 1e9),
-    "gasLimit": web3.utils.toHex(7000000),
+    "gasLimit": web3.utils.toHex(6666666),
     "data": bytecodeWithParam,
   };
   var privKey = Buffer.from(privateKey.substr(2), 'hex');
@@ -53,9 +57,11 @@ async function executeTransaction(bytecodeWithParam, nonce) {
   return new Promise((resolve, reject) => {
     web3.eth.sendSignedTransaction('0x' + serializedTx.toString('hex'))
       .on('transactionHash', (transactionHash => {
-        resolve(transactionHash)
+        // console.log("transactionHash:"+transactionHash);
+        resolve(transactionHash);
       }))
       .on('error', (err) => {
+        console.error(err);
         reject(err);
       });
   })

@@ -1,10 +1,10 @@
 {
     "contractAddress": {
-        "session_contractAddress": "0x7661b75Ebfd4Bf50517C32b8ADFE8FE0bdA666b1",
-        "token_contractAddress": "0x5202A0bF747AAB738C24fD71C048342E74398ef4",
-        "eth_contractAddress": "0xA770c0Efd3348bf15f7EF5AfE973442be5a190Cc",
-        "operator_contractAddress": "0x56e83B351e5EA0f6449fadC92101eA59Ed4e1638",
-        "cita_contractAddress": "0x67D1FDf7a461707268a5B6C1278dAfe0ECF3170d"
+        "session_contractAddress": "0x0D7efbE918d6790C8Ae7FA85b5E4c204Ca99A0ee",
+        "token_contractAddress": "0x0AaDbA2d43ddd2b79d585B3Fd4c2A824b6Da220A",
+        "eth_contractAddress": "0x4f7c421fdb0853acD07f0D6f6D45D3dca4737b96",
+        "operator_contractAddress": "0x6359C2455dd832Fe93b59E4EC6C19E89f00b11b0",
+        "cita_contractAddress": "0xba85197b9581EE2E135CBdbeC35Ce6613f1735d8"
     },
     "rinkeby": {
         "provider": "http://39.96.8.192:8545",
@@ -36,10 +36,18 @@
         "required": 1
     },
     "cita_constructArgs": {
-        "onchainPayment": "0xA770c0Efd3348bf15f7EF5AfE973442be5a190Cc",
+        "onchainPayment": "0x4f7c421fdb0853acD07f0D6f6D45D3dca4737b96",
         "provider": "0x739EA8f1f97eF574D75F91bf7e76AD3a1afB1C63",
         "regulator": "0x521057bece658436d70Fe6DEf9A6ebd6F4e462D7",
-        "operator": "0x56e83B351e5EA0f6449fadC92101eA59Ed4e1638",
+        "operator": "0x6359C2455dd832Fe93b59E4EC6C19E89f00b11b0",
         "chainID": 4
+    },
+    "gasPrice": {
+        "onchain": 5,
+        "token": 5
+    },
+    "gasLimit": {
+        "onchain": 6666666,
+        "token": 6666666
     }
 }

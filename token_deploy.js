@@ -1,5 +1,6 @@
 const Web3 = require('web3');
 const config = require('./conf.json');
+const [gasprice,gaslimit] =[config.gasPrice.token,config.gasLimit.token];
 const chain = config.rinkeby;
 const OnchainPayment = require('./build/contracts/LiteXToken.json');
 const constructArgs = [];
@@ -23,7 +24,7 @@ const deploy = async () => {
   // console.log('transactionHash:', transactionHash);
   let receipt;
   let repeatTime = 0;
-  while (repeatTime++ < 40) {
+  while (repeatTime++ < 100) {
     try {
       receipt = await web3.eth.getTransactionReceipt(transactionHash);
       // console.log(receipt)
@@ -46,8 +47,8 @@ async function executeTransaction(bytecodeWithParam, nonce) {
   var rawTransaction = {
     "from": account.address,
     "nonce": "0x" + nonce.toString(16),
-    "gasPrice": web3.utils.toHex(5 * 1e9),
-    "gasLimit": web3.utils.toHex(6666666),
+    "gasPrice": web3.utils.toHex(gasprice * 1e9),
+    "gasLimit": web3.utils.toHex(gaslimit),
     "data": bytecodeWithParam,
   };
   var privKey = Buffer.from(privateKey.substr(2), 'hex');

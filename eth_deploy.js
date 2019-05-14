@@ -2,6 +2,7 @@ const Web3 = require('web3');
 const OnchainPayment = require('./build/contracts/OnchainPayment.json');
 const fs = require('fs');
 const config = require('./conf.json');
+const [gasprice,gaslimit] =[config.gasPrice.onchain,config.gasLimit.onchain];
 const chain = config.rinkeby;
 let constructArgs = config.onchain_constructArgs;
 constructArgs = [
@@ -33,7 +34,7 @@ const deploy = async () => {
   // console.log('transactionHash:', transactionHash);
   let receipt;
   let repeatTime = 0;
-  while (repeatTime++ < 40) {
+  while (repeatTime++ < 60) {
     try {
       receipt = await web3.eth.getTransactionReceipt(transactionHash);
       if (receipt != null) {
@@ -55,8 +56,8 @@ async function executeTransaction(bytecodeWithParam, nonce) {
   var rawTransaction = {
     "from": account.address,
     "nonce": "0x" + nonce.toString(16),
-    "gasPrice": web3.utils.toHex(5 * 1e9),
-    "gasLimit": web3.utils.toHex(6666666),
+    "gasPrice": web3.utils.toHex(gasprice * 1e9),
+    "gasLimit": web3.utils.toHex(gaslimit),
     // "to": contractAddress,
     // "value": "0x0",
     "data": bytecodeWithParam,

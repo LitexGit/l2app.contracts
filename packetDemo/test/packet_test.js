@@ -40,38 +40,38 @@ contract('Session', (accounts) => {
     // console.log('res', res.receipt.logs[0]);
   })
 
-  it("verify wrong balance data should succ", async()=>{
-    let instance = await PacketVerify.new();
-    // console.log(rlpedData);
-    let res = await instance.verify.call(rlpedData.wrongData);
-    //assert.equal(res.toNumber(), 2001, "error: verify wrong balance data failed");
-    console.log('res', res);
-    // let res = await instance.verify(rlpedData);
-    // console.log('res', res.receipt.logs[0]);
-  })
+  // it("verify wrong balance data should succ", async()=>{
+  //   let instance = await PacketVerify.new();
+  //   // console.log(rlpedData);
+  //   let res = await instance.verify.call(rlpedData.wrongData);
+  //   //assert.equal(res.toNumber(), 2001, "error: verify wrong balance data failed");
+  //   console.log('res', res);
+  //   // let res = await instance.verify(rlpedData);
+  //   // console.log('res', res.receipt.logs[0]);
+  // })
 
-  it("verify cancel data should succ", async()=>{
-    let instance = await PacketVerify.new();
-    // console.log(rlpedData);
-    let res = await instance.verify.call(rlpedData.cancelData);
-    //assert.equal(res.toNumber(), 3001, "error: verify cancel data failed");
-    console.log('res', res);
-    // let res = await instance.verify(rlpedData);
-    // console.log('res', res.receipt.logs[0]);
-  })
+  // it("verify cancel data should succ", async()=>{
+  //   let instance = await PacketVerify.new();
+  //   // console.log(rlpedData);
+  //   let res = await instance.verify.call(rlpedData.cancelData);
+  //   //assert.equal(res.toNumber(), 3001, "error: verify cancel data failed");
+  //   console.log('res', res);
+  //   // let res = await instance.verify(rlpedData);
+  //   // console.log('res', res.receipt.logs[0]);
+  // })
 
-  it("verify appchain data should succ", async()=>{
-    let instance = await PacketVerify.new();
-    // console.log(rlpedData);
-    let res = await instance.verify.call(rlpedData.appchainData);
-    //assert.equal(res.toNumber(), 3001, "error: verify cancel data failed");
-    console.log('res', res);
+  // it("verify appchain data should succ", async()=>{
+  //   let instance = await PacketVerify.new();
+  //   // console.log(rlpedData);
+  //   let res = await instance.verify.call(rlpedData.appchainData);
+  //   //assert.equal(res.toNumber(), 3001, "error: verify cancel data failed");
+  //   console.log('res', res);
 
-    //res = await instance.testRlp.call(rlpedData.appchainData);
-    //console.log("msmsmsmsmsmsmsms", res);
-    // let res = await instance.verify(rlpedData);
-    // console.log('res', res.receipt.logs[0]);
-  })
+  //   //res = await instance.testRlp.call(rlpedData.appchainData);
+  //   //console.log("msmsmsmsmsmsmsms", res);
+  //   // let res = await instance.verify(rlpedData);
+  //   // console.log('res', res.receipt.logs[0]);
+  // })
 
   // it("debug", async()=>{
   //   let debug = await Debug.new();

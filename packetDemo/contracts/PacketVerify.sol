@@ -137,11 +137,12 @@ contract PacketVerify {
         uint256 m = uint256(urHash[0].urr^urHash[1].urr^urHash[2].urr^urHash[3].urr^urHash[4].urr^s.pr)%100 + 100;
         gameInformation = string(abi.encodePacked(gameInformation, ", module: ", uintToString(m)));
         uint256 minRand = 0;
-        for (uint j=0; j<5; j++) {
-            uint i = 4 - j;
-            urHash[i].m = uint256(urHash[i].urr)%m;
+        for (uint i=0; i<5; i++) {
+            // uint i = 4 - j;
+            // urHash[i].m = uint256(urHash[i].urr)%m;
+            urHash[i].m = selectNumber(uint256(urHash[i].urr)%(m-i) + 1, userModules, m);
             userModules[i] = urHash[i].m;
-            if(i == 4) {
+            if(i == 0) {
                 s.loser = urHash[i].user;
                 minRand = urHash[i].m;
             } else if(urHash[i].m < minRand) {
@@ -166,6 +167,35 @@ contract PacketVerify {
         }
         verifyResult = "Success!\n";
         return (verifyResult, gameInformation, loser, users, userSecretHashs, userSecrets, userModules, userSettleAmounts);
+    }
+
+    function selectNumber(
+        uint rand,
+        uint[5] memory userModules,
+        uint module
+    )
+        internal
+        view
+        returns(uint)
+    {
+        uint temp = rand;
+        for(uint i = 1; i < module + 1; i++){
+
+            bool included = false;
+            for(uint j = 0; j < 5; j ++){
+                if(userModules[j] == i){
+                    included = true;
+                    break;
+                }
+            }
+            if(!included) {
+                temp --;
+            }
+            if(temp <= 0){
+                return i;
+            }
+        }
+        return module;
     }
 
     function verifyCancel (

@@ -257,33 +257,34 @@ contract OnchainPayment {
         isChannelOpened(channelID)
         commitBlockValid(lastCommitBlock)
     {
-        bytes32 messageHash = keccak256(
-            abi.encodePacked(
-                address(this),
-                channelID,
-                withdraw,
-                lastCommitBlock
-            )
-        );
-        require(ECDSA.recover(messageHash, providerSignature) == provider, "invalid provider signature");
-        require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invalid regulator signature");
-        Channel storage channel = channelMap[channelID];
-        require(msg.sender == channel.user, "msg.sender should be user");
-        require(channel.withdraw < withdraw, "invalid withdraw");
-        uint256 amount = withdraw - channel.withdraw;
-        channel.withdraw = withdraw;
-        if (channel.token == address(0x0)) {
-            address(receiver).transfer(amount);
-        } else {
-            ERC20(channel.token).safeTransfer(receiver, amount);
-        }
-        emit UserWithdraw (
-            msg.sender,
-            channelID,
-            amount,
-            withdraw,
-            lastCommitBlock
-        );
+        // bytes32 messageHash = keccak256(
+        //     abi.encodePacked(
+        //         address(this),
+        //         channelID,
+        //         withdraw,
+        //         lastCommitBlock
+        //     )
+        // );
+        // require(ECDSA.recover(messageHash, providerSignature) == provider, "invalid provider signature");
+        // require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invalid regulator signature");
+        // Channel storage channel = channelMap[channelID];
+        // require(msg.sender == channel.user, "msg.sender should be user");
+        // require(channel.withdraw < withdraw, "invalid withdraw");
+        // uint256 amount = withdraw - channel.withdraw;
+        // channel.withdraw = withdraw;
+        // if (channel.token == address(0x0)) {
+        //     address(receiver).transfer(amount);
+        // } else {
+        //     ERC20(channel.token).safeTransfer(receiver, amount);
+        // }
+        // emit UserWithdraw (
+        //     msg.sender,
+        //     channelID,
+        //     amount,
+        //     withdraw,
+        //     lastCommitBlock
+        // );
+        revert();
     }
 
     function providerWithdraw (
@@ -380,8 +381,8 @@ contract OnchainPayment {
         require(ECDSA.recover(messageHash, providerSignature) == provider, "invalid provider signature");
         require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invalid regulator signature");
         uint256 payout = safeAdd(balance, channel.withdraw);
-        require(int256(payout) <= providerBalanceMap[channel.token]);
         if (payout >= channel.deposit) {
+            require(int256(payout - channel.deposit) <= providerBalanceMap[channel.token],"insufficient funds of provider");
             providerRegainMap[channel.token] -= int256(payout - channel.deposit);
             providerBalanceMap[channel.token] -= int256(payout - channel.deposit);
         } else {

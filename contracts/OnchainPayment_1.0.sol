@@ -307,14 +307,14 @@ contract OnchainPayment {
         );
         require(ECDSA.recover(messageHash, regulatorSignature) == regulator, "invaild regulator signature");
         uint256 withdraw = amount - providerWithdrawMap[token];
+        require(int256(withdraw) <= providerBalanceMap[token]);
         providerBalanceMap[token] -= int256(withdraw);
         providerWithdrawMap[token] = amount;
         if (token == address(0x0)) {
-            address(provider).transfer(amount);
+            address(provider).transfer(withdraw);
         } else {
-            ERC20(token).safeTransfer(provider, amount);
+            ERC20(token).safeTransfer(provider, withdraw);
         }
-        require(int256(withdraw) <= providerBalanceMap[token]);
         emit ProviderWithdraw (
             token,
             withdraw,

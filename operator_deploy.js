@@ -12,7 +12,7 @@ const deploy = function () {
 
 
   let config = require("./conf.json");
-  const chain = config.operator;
+  const chain = config.cita;
   let constructArgs = [config.operator_constructArgs.owners, config.operator_constructArgs.required]
 
 

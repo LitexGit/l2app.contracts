@@ -1,44 +1,34 @@
 {
-    "rinkeby": {
-        "provider": "http://39.96.8.192:8545",
-        "privateKey": "0xC2D37C42FBAEBC5CAB122A05B49414C4C0C446365AAE224CBF81ED018AE83F0A"
-    },
-    "mainnet": {
-        "provider": "",
-        "privateKey": ""
-    },
-    "cita": {
-        "provider": "http://54.64.76.19:1337",
-        "privateKey": "0x3D241518B9406184C13795CD228FBC04B0AEF26A31738B6DEE47F68C1E9B8CB5"
-    },
-    "operator":{
-        "provider":"http://54.64.76.19:1337",
-        "privateKey":"0x3D241518B9406184C13795CD228FBC04B0AEF26A31738B6DEE47F68C1E9B8CB5"
-    },
-    "onchain_constructArgs": {
-        "regulator":"0x521057bece658436d70Fe6DEf9A6ebd6F4e462D7",
-        "provider":"0x739EA8f1f97eF574D75F91bf7e76AD3a1afB1C63",
-        "settleWindowMin":1,
-        "settleWindowMax":9,
-        "chainID":4
-    },
-    "operator_constructArgs":{
-        "owners":["0x4Aa670bCe722B9698A670afc968b1dE5f1553df9"],
-        "required":1
-    },
-    "cita_constructArgs":{
-        "onchainPayment":"",
-        "provider":"0x739EA8f1f97eF574D75F91bf7e76AD3a1afB1C63",
-        "regulator":"0x521057bece658436d70Fe6DEf9A6ebd6F4e462D7",
-        "operator":"",
-        "chainID":4
-    },
-    "gasPrice":{
-        "onchain":5,
-        "token":5
-    },
-    "gasLimit":{
-        "onchain":6666666,
-        "token":6666666
-    }
+  "eth": {
+    "provider": "http://39.96.8.192:8545",
+    "privateKey": "0xC2D37C42FBAEBC5CAB122A05B49414C4C0C446365AAE224CBF81ED018AE83F0A"
+  },
+  "cita": {
+    "provider": "http://39.106.71.164:1337",
+    "privateKey": "0x3D241518B9406184C13795CD228FBC04B0AEF26A31738B6DEE47F68C1E9B8CB5"
+  },
+  "onchain_constructArgs": {
+    "regulator": "0x0546C39255789663648b3116Bf116FD2078FFDb9",
+    "provider": "0x236639F73ED3C3d6d40cDC10663Fea4B9FD78931",
+    "settleWindowMin": 1,
+    "settleWindowMax": 9,
+    "chainID": 4
+  },
+  "operator_constructArgs": {
+    "owners": ["0x4Aa670bCe722B9698A670afc968b1dE5f1553df9"],
+    "required": 1
+  },
+  "cita_constructArgs": {
+    "provider": "0x236639F73ED3C3d6d40cDC10663Fea4B9FD78931",
+    "regulator": "0x0546C39255789663648b3116Bf116FD2078FFDb9",
+    "chainID": 4
+  },
+  "gasPrice": {
+    "onchain": 5,
+    "token": 5
+  },
+  "gasLimit": {
+    "onchain": 6666666,
+    "token": 6666666
+  }
 }

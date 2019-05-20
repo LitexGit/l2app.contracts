@@ -1,7 +1,7 @@
 const Web3 = require('web3');
 const config = require('./conf.json');
 const [gasprice,gaslimit] =[config.gasPrice.token,config.gasLimit.token];
-const chain = config.rinkeby;
+const chain = config.eth;
 const OnchainPayment = require('./build/contracts/LiteXToken.json');
 const constructArgs = [];
 var Tx = require('ethereumjs-tx');

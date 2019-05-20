@@ -1,30 +1,23 @@
 {
     "contractAddress": {
-        "session_contractAddress": "0x0D7efbE918d6790C8Ae7FA85b5E4c204Ca99A0ee",
-        "token_contractAddress": "0x0AaDbA2d43ddd2b79d585B3Fd4c2A824b6Da220A",
-        "eth_contractAddress": "0x4f7c421fdb0853acD07f0D6f6D45D3dca4737b96",
-        "operator_contractAddress": "0x6359C2455dd832Fe93b59E4EC6C19E89f00b11b0",
-        "cita_contractAddress": "0xba85197b9581EE2E135CBdbeC35Ce6613f1735d8"
+        "appSessionAddress": "0x2bB28c7267ED97F01E995176d4c2c4764F4dB8ab",
+        "ethPNAddress": "0x330a75fa080096158F913a487791Ed59D2c42485",
+        "appOperatorAddress": "0x0A16d3487f9cb751cbc417c516932aA470a1a1db",
+        "appPNAddress": "0x3E906df594e7E61acFC7c15C1215BE8Ca277E8bC",
+        "ethPpcUrl": "http://39.96.8.192:8545",
+        "appRpcUrl": "http://39.106.71.164:1337"
     },
-    "rinkeby": {
+    "eth": {
         "provider": "http://39.96.8.192:8545",
         "privateKey": "0xC2D37C42FBAEBC5CAB122A05B49414C4C0C446365AAE224CBF81ED018AE83F0A"
     },
-    "mainnet": {
-        "provider": "",
-        "privateKey": ""
-    },
     "cita": {
-        "provider": "http://54.64.76.19:1337",
-        "privateKey": "0x3D241518B9406184C13795CD228FBC04B0AEF26A31738B6DEE47F68C1E9B8CB5"
-    },
-    "operator": {
-        "provider": "http://54.64.76.19:1337",
+        "provider": "http://39.106.71.164:1337",
         "privateKey": "0x3D241518B9406184C13795CD228FBC04B0AEF26A31738B6DEE47F68C1E9B8CB5"
     },
     "onchain_constructArgs": {
-        "regulator": "0x521057bece658436d70Fe6DEf9A6ebd6F4e462D7",
-        "provider": "0x739EA8f1f97eF574D75F91bf7e76AD3a1afB1C63",
+        "regulator": "0x0546C39255789663648b3116Bf116FD2078FFDb9",
+        "provider": "0x236639F73ED3C3d6d40cDC10663Fea4B9FD78931",
         "settleWindowMin": 1,
         "settleWindowMax": 9,
         "chainID": 4
@@ -36,11 +29,11 @@
         "required": 1
     },
     "cita_constructArgs": {
-        "onchainPayment": "0x4f7c421fdb0853acD07f0D6f6D45D3dca4737b96",
-        "provider": "0x739EA8f1f97eF574D75F91bf7e76AD3a1afB1C63",
-        "regulator": "0x521057bece658436d70Fe6DEf9A6ebd6F4e462D7",
-        "operator": "0x6359C2455dd832Fe93b59E4EC6C19E89f00b11b0",
-        "chainID": 4
+        "provider": "0x236639F73ED3C3d6d40cDC10663Fea4B9FD78931",
+        "regulator": "0x0546C39255789663648b3116Bf116FD2078FFDb9",
+        "chainID": 4,
+        "onchainPayment": "0x330a75fa080096158F913a487791Ed59D2c42485",
+        "operator": "0x0A16d3487f9cb751cbc417c516932aA470a1a1db"
     },
     "gasPrice": {
         "onchain": 5,

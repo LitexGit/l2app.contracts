@@ -3,7 +3,7 @@ const OnchainPayment = require('./build/contracts/OnchainPayment.json');
 const fs = require('fs');
 const config = require('./conf.json');
 const [gasprice,gaslimit] =[config.gasPrice.onchain,config.gasLimit.onchain];
-const chain = config.rinkeby;
+const chain = config.eth;
 let constructArgs = config.onchain_constructArgs;
 constructArgs = [
   constructArgs.regulator,

@@ -4,6 +4,7 @@ const operator_deploy = require('./operator_deploy')
 const cita_deploy = require('./cita_deploy.js')
 const token_deploy = require('./token_deploy')
 const session_deploy = require('./session_deploy')
+const config = require('./conf.json');
 
 
 let result = {};
@@ -16,22 +17,22 @@ session_deploy.deploy()
             res = '';
         }
         res = {
-            "session_contractAddress": res
+            "appSessionAddress": res
         };
         result = Object.assign(result, res);
         // result.push(res);
         // console.log("result:"+result)
-        return token_deploy.deploy() //deploy token
-    })
-    .then(res => {
-        console.log("token_contractAddress:" + res)
-        if(res == null){
-            res = '';
-        }
-        res = {
-            "token_contractAddress": res
-        };
-        result = Object.assign(result, res);
+    //     return token_deploy.deploy() //deploy token
+    // })
+    // .then(res => {
+    //     console.log("token_contractAddress:" + res)
+    //     if(res == null){
+    //         res = '';
+    //     }
+    //     res = {
+    //         "token_contractAddress": res
+    //     };
+    //     result = Object.assign(result, res);
         // result.push(res);
         // console.log("result:"+result)
         return eth_deploy.deploy(); //deploy eth
@@ -43,7 +44,7 @@ session_deploy.deploy()
         }
         onchainPayment = res;
         res = {
-            "eth_contractAddress": res
+            "ethPNAddress": res
         };
         result = Object.assign(result, res);
         // result.push(res);
@@ -57,7 +58,7 @@ session_deploy.deploy()
         }
         operator = res;
         res = {
-            "operator_contractAddress": res
+            "appOperatorAddress": res
         };
         result = Object.assign(result, res);
         // console.log("result:" + result)
@@ -70,47 +71,25 @@ session_deploy.deploy()
     .then(res => {
         console.log("cita_contractAddress:" + res)
         res = {
-            "cita_contractAddress": res
+            "appPNAddress": res,
+            ethPpcUrl: config.eth.provider,
+            appRpcUrl: config.cita.provider,
         };
         result = Object.assign(result, res);
         // console.log("result:"+result)
 
         //all contractAddress 
         result = {
-            "contractAddress": result
+            "contractAddress": result,
         }
-        // //write in contractAddress.json
-        // result_write = JSON.stringify(result, null, 4);
-        // fs.writeFile('./contractAddress.json', result_write, (err) => {
-        //     if (err) {
-        //         console.error(err);
-        //     } else {
-        //         console.log('add contractAddress succeed')
-        //     }
-        // })
 
         //read config json
-        const conf = fs.readFileSync('./conf.json');
-        const conf_json = JSON.parse(conf,(key ,value) => {
-            //add 
-            if(key == "cita_constructArgs"){
-                for (const prop in value) {
-                    if(prop == "onchainPayment"){
-                        value[prop] = onchainPayment;
-                    }
-                    if(prop == "operator"){
-                        value[prop] = operator;
-                    }
+        config.cita_constructArgs.onchainPayment = onchainPayment;
+        config.cita_constructArgs.operator = operator;
 
-                }
-                return value;
-            }else{
-                return value;
-            }
-        });
         //merge conf and contractAddress
 
-        result = Object.assign(result, conf_json);
+        result = Object.assign(result, config);
         //write in ouput.json
         result_write = JSON.stringify(result, null, 4);
         fs.writeFile('./ouput.json', result_write, (err) => {

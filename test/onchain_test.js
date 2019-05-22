@@ -2,13 +2,15 @@ const ethUtil = require('ethereumjs-util');
 
 var OnchainPayment = artifacts.require("OnchainPayment");
 var LiteXToken = artifacts.require("LiteXToken");
+var TetherToken = artifacts.require("TetherToken");
 
 function myEcsign(messageHash, privateKey) {
   messageHash = Buffer.from(messageHash.substr(2), 'hex')
   let signatureObj = ethUtil.ecsign(messageHash, privateKey);
   let signatureHexString = ethUtil.toRpcSig(signatureObj.v, signatureObj.r, signatureObj.s).toString('hex');
-  let signatureBytes = web3.utils.hexToBytes(signatureHexString);
-  return signatureBytes;
+  return signatureHexString;
+  // let signatureBytes = web3.utils.hexToBytes(signatureHexString);
+  // return signatureBytes;
 }
 
 contract('OnchainPayment', (accounts) => {
@@ -19,15 +21,16 @@ contract('OnchainPayment', (accounts) => {
   const puppetAddress1 = accounts[4];
   const puppetAddress2 = accounts[5];
   const puppetAddress3 = accounts[6];
-  const providerPrivateKey = Buffer.from("24e13489c83a8f892891075e94953348b9b1c5841a638819e6b062ea87122d4e", 'hex');
-  const regulatorPrivateKey = Buffer.from("de0fd81d5044820837c94143a5e32939fcc66e0705536d08ca350739ba34addb", 'hex');
-  const userPrivateKey = Buffer.from("d127601a67d8dc42ace4efcdfafa148bc09f3fea52b9df773f8d5bb3e5d71033", 'hex');
+  const providerPrivateKey = Buffer.from("15b38136d1e820d1847ad857a4c5b89db0c2e531179dfd32d5c21dc53a844845", 'hex');
+  const regulatorPrivateKey = Buffer.from("76bb8fb96acc3671278a5c1dc388cf3f90364547ad1f7b8b5a0db12f4556c00a", 'hex');
+  const userPrivateKey = Buffer.from("437cd862a77837a80a6f16fb1cf30eb27195680ad8506cf43eb23d655184ade6", 'hex');
   let myOnchainPayment;
   let myToken;
 
   beforeEach(async ()=>{
     myOnchainPayment = await OnchainPayment.new(regulatorAddress, providerAddress, 1, 9, 1, {from: providerAddress});
     myToken = await LiteXToken.new({from: userAddress});
+    // myToken = await TetherToken.new(100000000*10**6, 'TetherToken', 'USDT', 6, {from: userAddress});
     await myToken.transfer(providerAddress, 88888888, {from: userAddress});
     await myToken.approve(myOnchainPayment.address, 88888888, {from: providerAddress});
     await myToken.approve(myOnchainPayment.address, 88888888, {from: userAddress});
@@ -81,29 +84,29 @@ contract('OnchainPayment', (accounts) => {
     assert.equal(pDeposit.toNumber(), 100, "provider deposit eth error");
   });
 
-  it("user withdraw eth", async()=>{
-    let res = await myOnchainPayment.openChannel(userAddress, userAddress, 5, '0x0000000000000000000000000000000000000000', 0, {from: userAddress, value: 100});
-    let channelID = res.receipt.logs[0].args[6];
-    res = await myOnchainPayment.userDeposit(channelID, 0, {value: 100});
-    let hash = web3.utils.soliditySha3(myOnchainPayment.address, channelID, 80, 1000000);
-    let pSig = myEcsign(hash, providerPrivateKey);
-    let rSig = myEcsign(hash, regulatorPrivateKey);
-    res = await myOnchainPayment.userWithdraw(channelID, 80, 1000000, pSig, rSig, userAddress, {from: userAddress});
-    let channel = await myOnchainPayment.channelMap.call(channelID);
-    assert.equal(channel.withdraw.toNumber(), 80, "channel withdraw error");
-  });
+  // it("user withdraw eth", async()=>{
+  //   let res = await myOnchainPayment.openChannel(userAddress, userAddress, 5, '0x0000000000000000000000000000000000000000', 0, {from: userAddress, value: 100});
+  //   let channelID = res.receipt.logs[0].args[6];
+  //   res = await myOnchainPayment.userDeposit(channelID, 0, {value: 100});
+  //   let hash = web3.utils.soliditySha3(myOnchainPayment.address, channelID, 80, 1000000);
+  //   let pSig = myEcsign(hash, providerPrivateKey);
+  //   let rSig = myEcsign(hash, regulatorPrivateKey);
+  //   res = await myOnchainPayment.userWithdraw(channelID, 80, 1000000, pSig, rSig, userAddress, {from: userAddress});
+  //   let channel = await myOnchainPayment.channelMap.call(channelID);
+  //   assert.equal(channel.withdraw.toNumber(), 80, "channel withdraw error");
+  // });
 
-  it("user withdraw token", async()=>{
-    let res = await myOnchainPayment.openChannel(userAddress, userAddress, 5, myToken.address, 100, {from: userAddress});
-    let channelID = res.receipt.logs[0].args[6];
-    res = await myOnchainPayment.userDeposit(channelID, 100, {from: userAddress});
-    let hash = web3.utils.soliditySha3(myOnchainPayment.address, channelID, 80, 1000000);
-    let pSig = myEcsign(hash, providerPrivateKey);
-    let rSig = myEcsign(hash, regulatorPrivateKey);
-    res = await myOnchainPayment.userWithdraw(channelID, 80, 1000000, pSig, rSig, userAddress, {from: userAddress});
-    let channel = await myOnchainPayment.channelMap.call(channelID);
-    assert.equal(channel.withdraw.toNumber(), 80, "channel withdraw error");
-  });
+  // it("user withdraw token", async()=>{
+  //   let res = await myOnchainPayment.openChannel(userAddress, userAddress, 5, myToken.address, 100, {from: userAddress});
+  //   let channelID = res.receipt.logs[0].args[6];
+  //   res = await myOnchainPayment.userDeposit(channelID, 100, {from: userAddress});
+  //   let hash = web3.utils.soliditySha3(myOnchainPayment.address, channelID, 80, 1000000);
+  //   let pSig = myEcsign(hash, providerPrivateKey);
+  //   let rSig = myEcsign(hash, regulatorPrivateKey);
+  //   res = await myOnchainPayment.userWithdraw(channelID, 80, 1000000, pSig, rSig, userAddress, {from: userAddress});
+  //   let channel = await myOnchainPayment.channelMap.call(channelID);
+  //   assert.equal(channel.withdraw.toNumber(), 80, "channel withdraw error");
+  // });
 
   it("provider withdraw eth", async()=>{
     let res = await myOnchainPayment.providerDeposit('0x0000000000000000000000000000000000000000', 0, {value: 100});
@@ -166,38 +169,83 @@ contract('OnchainPayment', (accounts) => {
     assert.equal(channel.status.toNumber(), 0, "channel status error");
   });
 
-  // it("eth close and settle channel should success", async()=>{
-  //   let res = await myOnchainPayment.openChannel(userAddress, userAddress, 1, '0x0000000000000000000000000000000000000000', 0, {from: userAddress, value: 100});
-  //   let channelID = res.receipt.logs[0].args[6];
-  //   //console.log(channelID, myOnchainPayment.address);
+  it("eth close and settle channel should success", async()=>{
+    let res = await myOnchainPayment.openChannel(userAddress, userAddress, 1, '0x0000000000000000000000000000000000000000', 0, {from: userAddress, value: 100});
+    let channelID = res.receipt.logs[0].args[6];
+    //console.log(channelID, myOnchainPayment.address);
 
-  //   res = await myOnchainPayment.closeChannel(channelID, 0, 0, "0x0", "0x0", 0, 0, "0x0", "0x0", {from: userAddress});
-  //   console.log(res.receipt.logs[0])
+    //Build rebalanceIn message
 
-  //   await OnchainPayment.new(regulatorAddress, providerAddress, 1, 9, 1, {from: providerAddress});
+    res = await myOnchainPayment.closeChannel(channelID, 0, 0, "0x0", "0x0", 0, 0, "0x0", "0x0", {from: userAddress});
+    console.log(res.receipt.logs[0])
 
-  //   res = await myOnchainPayment.settleChannel(channelID);
+    await OnchainPayment.new(regulatorAddress, providerAddress, 1, 9, 1, {from: providerAddress});
 
-  // });
+    res = await myOnchainPayment.settleChannel(channelID);
+    console.log(res.receipt.logs[0]);
+
+  });
+
+  it("eth close and settle channel should success", async()=>{
+    let res = await myOnchainPayment.openChannel(userAddress, userAddress, 1, '0x0000000000000000000000000000000000000000', 0, {from: userAddress, value: 100});
+    let channelID = res.receipt.logs[0].args[6];
+    //console.log(channelID, myOnchainPayment.address);
+
+    //Build rebalanceIn message
 
 
-  // it("token close and settle channel should success", async()=>{
-  //   await myToken.approve(myOnchainPayment.address, 888, {from: userAddress});
+    res = await myOnchainPayment.closeChannel(channelID, 0, 0, "0x0", "0x0", 0, 0, "0x0", "0x0", {from: userAddress});
+    console.log(res.receipt.logs[0])
 
-  //   let res = await myOnchainPayment.openChannel(userAddress, userAddress, 1, myToken.address, 88, {from: userAddress});
-  //   let channelID = res.receipt.logs[0].args[6];
-  //   console.log(channelID, myOnchainPayment.address);
+    await OnchainPayment.new(regulatorAddress, providerAddress, 1, 9, 1, {from: providerAddress});
 
-  //   res = await myOnchainPayment.closeChannel(channelID, 0, 0, "0x0", "0x0", 0, 0, "0x0", "0x0", {from: userAddress});
-  //   console.log(res.receipt.logs[0])
+    res = await myOnchainPayment.settleChannel(channelID);
+    console.log(res.receipt.logs[0]);
 
-  //   let channelData = await myOnchainPayment.channels.call(channelID);
-  //   console.log("channel data:", channelData);
+  });
 
-  //   await OnchainPayment.new(regulatorAddress, providerAddress, 1, 9, 1, {from: providerAddress});
+  it("token close and settle channel with RebalanceMsg should success", async()=>{
+    // await myToken.approve(myOnchainPayment.address, 888, {from: userAddress});
 
-  //   res = await myOnchainPayment.settleChannel(channelID);
+    let res = await myOnchainPayment.openChannel(userAddress, userAddress, 1, myToken.address, 88, {from: userAddress});
+    let channelID = res.receipt.logs[0].args[6];
+    console.log(channelID, myOnchainPayment.address);
 
-  // });
+    //Build rebalanceIn message
+    let rebalanceInAmount = 10;
+    let rebalanceInNonce = 1;
+    let flag = web3.utils.soliditySha3({v: 'rebalanceIn', t: 'string'});
+    let mHash = web3.utils.soliditySha3(
+      {v: myOnchainPayment.address, t:'address'}, 
+      {v: flag, t: 'bytes32'},
+      {v: channelID, t: 'bytes32'}, 
+      {v: rebalanceInAmount, t: 'uint256'},
+      {v: rebalanceInNonce, t: 'uint256'});
+    let providerSignature = myEcsign(mHash, providerPrivateKey);
+    let regulatorSignature = myEcsign(mHash, regulatorPrivateKey);
+
+    res = await myOnchainPayment.closeChannel(
+      channelID,
+      0,
+      0,
+      "0x0",
+      "0x0",
+      rebalanceInAmount,
+      rebalanceInNonce,
+      regulatorSignature,
+      providerSignature,
+      { from: userAddress }
+    );
+    console.log(res.receipt.logs[0])
+
+    let channelData = await myOnchainPayment.channelMap.call(channelID);
+    console.log("channel data:", channelData);
+
+    await OnchainPayment.new(regulatorAddress, providerAddress, 1, 9, 1, {from: providerAddress});
+
+    res = await myOnchainPayment.settleChannel(channelID);
+    console.log(res.receipt.logs[0]);
+
+  });
 
 });

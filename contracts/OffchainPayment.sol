@@ -609,6 +609,7 @@ contract OffchainPayment {
         bytes32 messageHash = keccak256(
             abi.encodePacked(
                 onchainPayment,
+                keccak256(abi.encodePacked("rebalanceIn")),
                 channelID,
                 amount,
                 nonce
@@ -641,6 +642,7 @@ contract OffchainPayment {
         bytes32 messageHash = keccak256(
             abi.encodePacked(
                 onchainPayment,
+                keccak256(abi.encodePacked("rebalanceIn")),
                 proposeRebalanceProof.channelID,
                 proposeRebalanceProof.amount,
                 proposeRebalanceProof.nonce

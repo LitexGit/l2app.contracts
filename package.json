@@ -19,7 +19,12 @@
     "web3": "^1.0.0-beta.48"
   },
   "devDependencies": {
-    "cz-conventional-changelog": "^2.1.0"
+    "bip39": "^3.0.2",
+    "chai": "^4.2.0",
+    "chai-bn": "^0.1.1",
+    "cz-conventional-changelog": "^2.1.0",
+    "ethereumjs-wallet": "^0.6.3",
+    "openzeppelin-test-helpers": "^0.4.0"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

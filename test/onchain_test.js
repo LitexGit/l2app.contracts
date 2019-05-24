@@ -1,34 +1,31 @@
 const ethUtil = require('ethereumjs-util');
-
+const { expectRevert, time } = require('openzeppelin-test-helpers');
 var OnchainPayment = artifacts.require("OnchainPayment");
 var LiteXToken = artifacts.require("LiteXToken");
 var TetherToken = artifacts.require("TetherToken");
 
-function myEcsign(messageHash, privateKey) {
-  messageHash = Buffer.from(messageHash.substr(2), 'hex')
-  let signatureObj = ethUtil.ecsign(messageHash, privateKey);
-  let signatureHexString = ethUtil.toRpcSig(signatureObj.v, signatureObj.r, signatureObj.s).toString('hex');
-  return signatureHexString;
-  // let signatureBytes = web3.utils.hexToBytes(signatureHexString);
-  // return signatureBytes;
-}
+const { tEcsign, myEcsign, personalSign } = require("./utils/helper");
+const { getPrivateKeys } = require("./utils/keys");
+let { typedData, signHash } = require("./utils/typedData");
 
 contract('OnchainPayment', (accounts) => {
   const providerAddress = accounts[0];
   const regulatorAddress = accounts[1];
   const userAddress = accounts[2];
-  const tokenAddress = accounts[3];
-  const puppetAddress1 = accounts[4];
-  const puppetAddress2 = accounts[5];
-  const puppetAddress3 = accounts[6];
-  const providerPrivateKey = Buffer.from("15b38136d1e820d1847ad857a4c5b89db0c2e531179dfd32d5c21dc53a844845", 'hex');
-  const regulatorPrivateKey = Buffer.from("76bb8fb96acc3671278a5c1dc388cf3f90364547ad1f7b8b5a0db12f4556c00a", 'hex');
-  const userPrivateKey = Buffer.from("437cd862a77837a80a6f16fb1cf30eb27195680ad8506cf43eb23d655184ade6", 'hex');
   let myOnchainPayment;
   let myToken;
+  let providerPrivateKey, regulatorPrivateKey, userPrivateKey;
+  before(async () => {
+    let keys = await getPrivateKeys();
+    providerPrivateKey = keys.providerPrivateKey;
+    regulatorPrivateKey = keys.regulatorPrivateKey;
+    userPrivateKey = keys.userPrivateKey;
+  });
 
   beforeEach(async ()=>{
     myOnchainPayment = await OnchainPayment.new(regulatorAddress, providerAddress, 1, 9, 1, {from: providerAddress});
+    typedData.domain.verifyingContract = myOnchainPayment.address;
+    typedData.domain.chainId = 1;
     myToken = await LiteXToken.new({from: userAddress});
     // myToken = await TetherToken.new(100000000*10**6, 'TetherToken', 'USDT', 6, {from: userAddress});
     await myToken.transfer(providerAddress, 88888888, {from: userAddress});
@@ -161,91 +158,127 @@ contract('OnchainPayment', (accounts) => {
     await myOnchainPayment.providerDeposit(myToken.address, 8888, {from: providerAddress});
     let res = await myOnchainPayment.openChannel(userAddress, userAddress, 1, myToken.address, 88, {from: userAddress});
     let channelID = res.receipt.logs[0].args[6];
-    let messageHash = web3.utils.soliditySha3(myOnchainPayment.address, channelID, 8, 888);
+    let messageHash = web3.utils.soliditySha3(myOnchainPayment.address, channelID, 8, 888888);
     let providerSig = myEcsign(messageHash, providerPrivateKey);
     let regulatorSig = myEcsign(messageHash, regulatorPrivateKey);
-    res = await myOnchainPayment.cooperativeSettle(channelID, 8, 888, providerSig, regulatorSig, {from: userAddress});
+    res = await myOnchainPayment.cooperativeSettle(channelID, 8, 888888, providerSig, regulatorSig, {from: userAddress});
     let channel = await myOnchainPayment.channelMap.call(channelID);
     assert.equal(channel.status.toNumber(), 0, "channel status error");
   });
 
   it("eth close and settle channel should success", async()=>{
-    let res = await myOnchainPayment.openChannel(userAddress, userAddress, 1, '0x0000000000000000000000000000000000000000', 0, {from: userAddress, value: 100});
+    let depositAmount = 100;
+    let res = await myOnchainPayment.openChannel(userAddress, userAddress, 1, '0x0000000000000000000000000000000000000000', depositAmount, {from: userAddress, value: depositAmount});
     let channelID = res.receipt.logs[0].args[6];
     //console.log(channelID, myOnchainPayment.address);
 
-    //Build rebalanceIn message
-
     res = await myOnchainPayment.closeChannel(channelID, 0, 0, "0x0", "0x0", 0, 0, "0x0", "0x0", {from: userAddress});
-    console.log(res.receipt.logs[0])
+    // console.log(res.receipt.logs[0])
 
-    await OnchainPayment.new(regulatorAddress, providerAddress, 1, 9, 1, {from: providerAddress});
+    await time.advanceBlock();
 
     res = await myOnchainPayment.settleChannel(channelID);
-    console.log(res.receipt.logs[0]);
+    // console.log(res.receipt.logs[0]);
+
+    let { args: event } = res.receipt.logs[0];
+    assert.equal(event.transferToUserAmount.toNumber(), depositAmount);
+    assert.equal(event.providerRegain.toNumber(), 0);
 
   });
 
-  it("eth close and settle channel should success", async()=>{
-    let res = await myOnchainPayment.openChannel(userAddress, userAddress, 1, '0x0000000000000000000000000000000000000000', 0, {from: userAddress, value: 100});
-    let channelID = res.receipt.logs[0].args[6];
+  async function tokenForceClose(userDeposit, providerDeposit, userTransferredAmount, providerTransferredAmount, rebalanceInAmount){
+    let res = await myOnchainPayment.openChannel(userAddress, userAddress, 2, myToken.address, userDeposit, {from: userAddress, value: 0,});
+    if(providerDeposit > 0){
+      await myOnchainPayment.providerDeposit(myToken.address, providerDeposit, {from: providerAddress});
+    }
+    let channelID = res.receipt.logs[0].args.channelID;
     //console.log(channelID, myOnchainPayment.address);
+    let additionalHash = '0x0'
 
+    //Build provider's transfer message
+    let providerTransferredNonce = 0; 
+    let providerSignature = '0x0'; 
+    if(providerTransferredAmount > 0){
+      providerTransferredNonce = 1;
+      typedData.message.channelID = channelID;
+      typedData.message.balance = providerTransferredAmount;
+      typedData.message.nonce = providerTransferredNonce;
+      typedData.message.additionalHash = additionalHash;
+      providerSignature = web3.utils.bytesToHex(tEcsign(signHash(), providerPrivateKey));
+    }
     //Build rebalanceIn message
+    let rebalanceInNonce = 0;
+    let inProviderSignature = '0x0';
+    let inRegulatorSignature = '0x0';
+    if(rebalanceInAmount > 0){
+      rebalanceInNonce = 1;
+      let flag = web3.utils.soliditySha3({v: 'rebalanceIn', t: 'string'});
+      let mHash = web3.utils.soliditySha3(
+        {v: myOnchainPayment.address, t:'address'}, 
+        {v: flag, t: 'bytes32'},
+        {v: channelID, t: 'bytes32'}, 
+        {v: rebalanceInAmount, t: 'uint256'},
+        {v: rebalanceInNonce, t: 'uint256'});
+      inProviderSignature = myEcsign(mHash, providerPrivateKey);
+      inRegulatorSignature = myEcsign(mHash, regulatorPrivateKey); 
+
+    }
 
 
-    res = await myOnchainPayment.closeChannel(channelID, 0, 0, "0x0", "0x0", 0, 0, "0x0", "0x0", {from: userAddress});
-    console.log(res.receipt.logs[0])
+    res = await myOnchainPayment.closeChannel(channelID, providerTransferredAmount, providerTransferredNonce, additionalHash, providerSignature, rebalanceInAmount, rebalanceInNonce,  inRegulatorSignature, inProviderSignature, {from: userAddress});
 
-    await OnchainPayment.new(regulatorAddress, providerAddress, 1, 9, 1, {from: providerAddress});
+    // Build user's transfer message
+    let userTransferredNonce = 0;
+    let userSignature = '0x0';
+    let consignorSignature = '0x0';
+    if(userTransferredAmount > 0){
+      userTransferredNonce = 1;
+      typedData.message.channelID = channelID;
+      typedData.message.balance = userTransferredAmount;
+      typedData.message.nonce = userTransferredNonce;
+      typedData.message.additionalHash = additionalHash;
+      userSignature = web3.utils.bytesToHex(tEcsign(signHash(), userPrivateKey));
+      let messageHash = web3.utils.soliditySha3(myOnchainPayment.address, channelID, userTransferredAmount, userTransferredNonce, {v: additionalHash, t: 'bytes32'}, {v: userSignature, t: 'bytes'});
+      consignorSignature = myEcsign(messageHash, providerPrivateKey);
+    }
+
+    res = await myOnchainPayment.partnerUpdateProof(channelID, userTransferredAmount, userTransferredNonce, additionalHash, userSignature, consignorSignature, {from: providerAddress});
+
+    await time.advanceBlock();
+    await time.advanceBlock();
 
     res = await myOnchainPayment.settleChannel(channelID);
-    console.log(res.receipt.logs[0]);
+    // console.log(res.receipt.logs[0]);
+    let {args: event} = res.receipt.logs[0];
+    
+    let channelTotal = userDeposit + rebalanceInAmount;
+    let userSettleAmount = userDeposit + providerTransferredAmount - userTransferredAmount;
+    userSettleAmount = Math.min(channelTotal, userSettleAmount);
+    userSettleAmount = Math.max(0, userSettleAmount);
+    let providerRegainAmount = userDeposit - userSettleAmount;
 
+    assert.equal(event.transferToUserAmount.toNumber(), userSettleAmount);
+    assert.equal(event.providerRegain.toNumber(), providerRegainAmount);
+  }
+
+  it("token close and settle channel should success", async()=>{
+    await tokenForceClose(1000, 100, 10, 5, 0);
+  });
+
+  it("token close and settle channel with big userTransferAmount should success", async()=>{
+    await tokenForceClose(1000, 100, 10001, 1, 0);
+  });
+
+  it("token close and settle channel with big rebalanceInAmount should success", async()=>{
+    await tokenForceClose(1000, 10000, 10, 10005, 10000);
+  });
+
+  it("token close and settle channel with big ProviderTransferAmount should success", async()=>{
+    await tokenForceClose(1000, 100, 10001, 20001, 10);
   });
 
   it("token close and settle channel with RebalanceMsg should success", async()=>{
-    // await myToken.approve(myOnchainPayment.address, 888, {from: userAddress});
-
-    let res = await myOnchainPayment.openChannel(userAddress, userAddress, 1, myToken.address, 88, {from: userAddress});
-    let channelID = res.receipt.logs[0].args[6];
-    console.log(channelID, myOnchainPayment.address);
-
-    //Build rebalanceIn message
-    let rebalanceInAmount = 10;
-    let rebalanceInNonce = 1;
-    let flag = web3.utils.soliditySha3({v: 'rebalanceIn', t: 'string'});
-    let mHash = web3.utils.soliditySha3(
-      {v: myOnchainPayment.address, t:'address'}, 
-      {v: flag, t: 'bytes32'},
-      {v: channelID, t: 'bytes32'}, 
-      {v: rebalanceInAmount, t: 'uint256'},
-      {v: rebalanceInNonce, t: 'uint256'});
-    let providerSignature = myEcsign(mHash, providerPrivateKey);
-    let regulatorSignature = myEcsign(mHash, regulatorPrivateKey);
-
-    res = await myOnchainPayment.closeChannel(
-      channelID,
-      0,
-      0,
-      "0x0",
-      "0x0",
-      rebalanceInAmount,
-      rebalanceInNonce,
-      regulatorSignature,
-      providerSignature,
-      { from: userAddress }
-    );
-    console.log(res.receipt.logs[0])
-
-    let channelData = await myOnchainPayment.channelMap.call(channelID);
-    console.log("channel data:", channelData);
-
-    await OnchainPayment.new(regulatorAddress, providerAddress, 1, 9, 1, {from: providerAddress});
-
-    res = await myOnchainPayment.settleChannel(channelID);
-    console.log(res.receipt.logs[0]);
-
+    await tokenForceClose(1000, 100, 10001, 0, 10000);
   });
 
 });

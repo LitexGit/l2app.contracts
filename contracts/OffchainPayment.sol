@@ -239,16 +239,17 @@ contract OffchainPayment {
     {
         Channel storage channel = channelMap[channelID];
         require(channel.status == 1, "channel should be open");
-        bytes32 messageHash = transferHash(
+        uint8 participantIndex = recoverPariticipantFromSignature(
             channelID,
             balance,
             nonce,
-            additionalHash
+            additionalHash,
+            channel.user,
+            signature
         );
-        address recoveredSignature = ECDSA.recover(messageHash, signature);
-        // address recoveredSignature = recover(messageHash, signature);
+
         uint256 transferAmount;
-        if (recoveredSignature == provider) {
+        if (participantIndex == 2) {
             BalanceProof storage userBalanceProof = balanceProofMap[channelID][to];
             require(userBalanceProof.balance < balance, "invalid balance");
             require(userBalanceProof.nonce < nonce, "invalid nonce");
@@ -270,7 +271,7 @@ contract OffchainPayment {
                 nonce,
                 additionalHash
             );
-        } else if (recoveredSignature == channel.user) {
+        } else if (participantIndex == 1) {
             BalanceProof storage balanceProof = balanceProofMap[channelID][provider];
             require(balanceProof.balance < balance, "invalid balance");
             require(balanceProof.nonce < nonce, "invalid nonce");
@@ -892,6 +893,8 @@ contract OffchainPayment {
         channel.status = 3;
 
         PaymentNetwork storage paymentNetwork = paymentNetworkMap[channel.token];
+
+        paymentNetwork.userCount -= 1;
         paymentNetwork.userTotalDeposit -= channel.userDeposit;
         paymentNetwork.userTotalWithdraw -= channel.userWithdraw;
 
@@ -1151,6 +1154,41 @@ contract OffchainPayment {
         }
     }
 
+    function recoverPariticipantFromSignature(
+        bytes32 channelID,
+        uint256 balance,
+        uint256 nonce,
+        bytes32 additionalHash,
+        address user,
+        bytes memory signature
+    )
+        private
+        view
+        returns(uint8)
+    {
+        bytes32 hash1;
+        bytes32 hash2;
+        (hash1, hash2) = transferHash(channelID, balance, nonce, additionalHash);
+
+        address recoveredSignature1 = ECDSA.recover(hash1, signature);
+        if( recoveredSignature1 == user ){
+            return 1;
+        }
+        if( recoveredSignature1 == provider ){
+            return 2;
+        }
+
+        address recoveredSignature2 = ECDSA.recover(hash2, signature);
+        if( recoveredSignature2 == user ){
+            return 1;
+        }
+        if( recoveredSignature2 == provider ){
+            return 2;
+        }
+
+        return 0;
+    }
+
     /**
      * @dev Calculate typed hash of given data (compare eth_signTypedData).
      * @return Hash of given data.
@@ -1163,7 +1201,7 @@ contract OffchainPayment {
     )
         private
         view
-        returns(bytes32)
+        returns(bytes32, bytes32)
     {
         bytes32 hash = keccak256(abi.encode(
             TRANSFER_TYPEHASH,
@@ -1173,11 +1211,15 @@ contract OffchainPayment {
             additionalHash
         ));
 
-        return keccak256(abi.encodePacked(
+        bytes32 hash1 = keccak256(abi.encodePacked(
             "\x19\x01",
             DOMAIN_SEPERATOR,
             hash
         ));
+
+        bytes32 hash2 = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hash1));
+
+        return (hash1, hash2);
     }
 
     // /**

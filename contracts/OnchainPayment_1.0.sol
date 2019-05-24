@@ -469,22 +469,23 @@ contract OnchainPayment {
             )
         );
         address recoveredConsignor = ECDSA.recover(messageHash, consignorSignature);
-        address recoveredPartner = recoverBalanceSignature (
+        uint8 recoveredPartner = recoverBalanceSignature (
             channelID,
             balance,
             nonce,
             additionalHash,
+            channel.user,
             partnerSignature
         );
         if (channel.isCloser) {
-            require(recoveredPartner == channel.user, "invalid partner signature");
+            require(recoveredPartner == 1, "invalid partner user signature");
             require(recoveredConsignor == provider, "invalid consignor signature");
             if (nonce > channel.userNonce) {
                 channel.userNonce = nonce;
                 channel.userBalance = balance;
             }
         } else {
-            require(recoveredPartner == provider, "invalid partner signature");
+            require(recoveredPartner == 2, "invalid partner provider signature");
             require(puppetMap[channel.user][recoveredConsignor] == 1, "invalid consignor signature");
             if (nonce > channel.providerNonce) {
                 channel.providerNonce = nonce;
@@ -536,6 +537,9 @@ contract OnchainPayment {
         require(block.number > channel.settleBlock, "settleWindow should be over");
         require(safeAdd(channel.deposit, channel.inAmount) >= channel.withdraw,  "channel balance should be positive");
         providerBalanceMap[channel.token] -= int256(channel.inAmount);
+
+        uint256 channelTotalAmount = safeSub(safeAdd(channel.deposit, channel.inAmount), channel.withdraw);
+
         uint256 userTransferredAmount;
         uint256 providerTransferredAmount;
         uint256 margin;
@@ -549,25 +553,25 @@ contract OnchainPayment {
         );
         if (min == channel.userBalance) {
             providerTransferredAmount = safeSub(channel.inAmount, margin);
-            userTransferredAmount = safeSub(safeAdd(channel.deposit, margin), channel.withdraw);
-            providerRegainMap[channel.token] -= int256(margin);
+            userTransferredAmount = safeSub(channelTotalAmount, providerTransferredAmount);
+            providerRegainMap[channel.token] -= int256(safeSub(channel.inAmount, providerTransferredAmount));
             emit ChannelSettled (
                 channel.user,
                 channel.token,
                 channelID,
                 userTransferredAmount,
-                0 - int256(margin)
+                0 - int256(safeSub(channel.inAmount, providerTransferredAmount))
             );
         } else {
             userTransferredAmount = safeSub(channel.deposit, safeAdd(channel.withdraw, margin));
-            providerTransferredAmount = safeAdd(channel.inAmount, margin);
-            providerRegainMap[channel.token] += int256(margin);
+            providerTransferredAmount = safeSub(channelTotalAmount, userTransferredAmount);
+            providerRegainMap[channel.token] += int256(safeSub(providerTransferredAmount, channel.inAmount));
             emit ChannelSettled (
                 channel.user,
                 channel.token,
                 channelID,
                 userTransferredAmount,
-                int256(margin)
+                int256(safeSub(providerTransferredAmount, channel.inAmount))
             );
         }
         if (userTransferredAmount > 0) {
@@ -687,7 +691,6 @@ contract OnchainPayment {
     /**
      *  Internal Methods
      */
-
     function transferHash(
         bytes32 channelID,
         uint256 balance,
@@ -696,22 +699,25 @@ contract OnchainPayment {
     )
         private
         view
-        returns(bytes32)
+        returns(bytes32, bytes32)
     {
-        bytes32 hash = keccak256(
-            abi.encode(
-                TRANSFER_TYPEHASH,
-                channelID,
-                balance,
-                nonce,
-                additionalHash)
-        );
-        return keccak256(
-            abi.encodePacked(
+        bytes32 hash = keccak256(abi.encode(
+            TRANSFER_TYPEHASH,
+            channelID,
+            balance,
+            nonce,
+            additionalHash
+        ));
+
+        bytes32 hash1 = keccak256(abi.encodePacked(
             "\x19\x01",
             DOMAIN_SEPERATOR,
-            hash)
-        );
+            hash
+        ));
+
+        bytes32 hash2 = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hash1));
+
+        return (hash1, hash2);
     }
 
     function handleBalanceProof (
@@ -733,21 +739,22 @@ contract OnchainPayment {
             }
             return;
         }
-        address recoveredPartner = recoverBalanceSignature (
+        uint8 recoveredPartner = recoverBalanceSignature(
             channelID,
             balance,
             nonce,
             additionalHash,
+            channel.user,
             partnerSignature
         );
-        if (recoveredPartner == channel.user) {
+        if (recoveredPartner == 1) {
             require(msg.sender == provider, "only provider can trigger");
             if (nonce > 0) {
                 channel.userBalance = balance;
                 channel.userNonce = nonce;
             }
             channel.isCloser = false;
-        } else if (recoveredPartner == provider) {
+        } else if (recoveredPartner == 2) {
             require(msg.sender == channel.user, "only user can trigger");
             if (nonce > 0) {
                 channel.providerBalance = balance;
@@ -759,24 +766,39 @@ contract OnchainPayment {
         }
     }
 
-    function recoverBalanceSignature (
+    function recoverBalanceSignature(
         bytes32 channelID,
         uint256 balance,
         uint256 nonce,
         bytes32 additionalHash,
+        address user,
         bytes memory signature
     )
-        internal
+        private
         view
-        returns (address)
+        returns(uint8)
     {
-        bytes32 messageHash = transferHash(
-            channelID,
-            balance,
-            nonce,
-            additionalHash
-        );
-        return ECDSA.recover(messageHash, signature);
+        bytes32 hash1;
+        bytes32 hash2;
+        (hash1, hash2) = transferHash(channelID, balance, nonce, additionalHash);
+
+        address recoveredSignature1 = ECDSA.recover(hash1, signature);
+        if( recoveredSignature1 == user ){
+            return 1;
+        }
+        if( recoveredSignature1 == provider ){
+            return 2;
+        }
+
+        address recoveredSignature2 = ECDSA.recover(hash2, signature);
+        if( recoveredSignature2 == user ){
+            return 1;
+        }
+        if( recoveredSignature2 == provider ){
+            return 2;
+        }
+
+        return 0;
     }
 
     function updateRebalanceProof (

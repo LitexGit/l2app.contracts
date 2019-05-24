@@ -3,3 +3,6 @@ package-lock.json
 build/
 .DS_Store
 packetDemo/flatten.txt
+conf.json.mainnet
+conf.json
+ouput.json

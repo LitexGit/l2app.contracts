@@ -11,8 +11,8 @@
     "regulator": "0x0546C39255789663648b3116Bf116FD2078FFDb9",
     "provider": "0x236639F73ED3C3d6d40cDC10663Fea4B9FD78931",
     "settleWindowMin": 1,
-    "settleWindowMax": 9,
-    "chainID": 4
+    "settleWindowMax": 250,
+    "chainID": 4 
   },
   "operator_constructArgs": {
     "owners": ["0x4Aa670bCe722B9698A670afc968b1dE5f1553df9"],
@@ -21,11 +21,11 @@
   "cita_constructArgs": {
     "provider": "0x236639F73ED3C3d6d40cDC10663Fea4B9FD78931",
     "regulator": "0x0546C39255789663648b3116Bf116FD2078FFDb9",
-    "chainID": 4
+    "chainID": 4 
   },
   "gasPrice": {
-    "onchain": 5,
-    "token": 5
+    "onchain": 3.1,
+    "token": 3.1 
   },
   "gasLimit": {
     "onchain": 6666666,

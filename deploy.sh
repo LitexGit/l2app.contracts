@@ -1,10 +1,15 @@
 #!/bin/bash
 
-onchainPayment=$(node ./eth_deploy.js)
-echo onchainPayment: $onchainPayment
+net=rinkeby
 
-operator=$(node ./operator_deploy.js)
-echo operator address: $operator
+if [ ! -n "$1" ] ;then
+    net=rinkeby
+else
+    net=$1
+fi
 
-offchainPayment=$(node ./cita_deploy.js $onchainPayment $operator)
-echo offchainPayment: $offchainPayment
+echo "$net"
+cp conf.json.$net conf.json
+
+truffle compile
+node deploy.js

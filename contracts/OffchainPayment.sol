@@ -888,7 +888,7 @@ contract OffchainPayment {
     isOperator(msg.sender)
     public {
         Channel storage channel = channelMap[channelID];
-        require(channel.status == 4, "channel should be waiting for co-close");
+        // require(channel.status == 4, "channel should be waiting for co-close");
 
         channel.status = 3;
 
@@ -929,7 +929,7 @@ contract OffchainPayment {
     {
         // find channel
         Channel storage channel = channelMap[channelID];
-        require(channel.status == 1, "channel should be open");
+        // require(channel.status == 1, "channel should be open");
 
         // set status to close
         channel.status = 2;
@@ -1081,6 +1081,7 @@ contract OffchainPayment {
         bytes32 channelID
     )
     public {
+
         uint256 ethBlockNumber =  MultiSignInterface(operator).getEthBlockNumber();
         // uint256 ethBlockNumber = 99999;
         UserWithdrawProof storage userWithdrawProof = userWithdrawProofMap[channelID];
@@ -1123,7 +1124,11 @@ contract OffchainPayment {
         // uint256 ethBlockNumber = 9999;
         uint256 ethBlockNumber =  MultiSignInterface(operator).getEthBlockNumber();
         require(cooperativeSettleProofMap[channelID].lastCommitBlock < ethBlockNumber, "invalid block number");
-        channelMap[channelID].status = 1;
+
+        Channel storage channel = channelMap[channelID];
+        require(channel.status == 4, "channel should be waiting for co-close");
+
+        channel.status = 1;
         delete cooperativeSettleProofMap[channelID];
 
         emit UnlockCooperativeSettle(

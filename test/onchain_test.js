@@ -281,4 +281,28 @@ contract('OnchainPayment', (accounts) => {
     await tokenForceClose(1000, 100, 10001, 0, 10000);
   });
 
+  // it("token and eth should be return to owner when contract kill", async()=> {
+
+  //   await myOnchainPayment.openChannel(userAddress, userAddress, 5, '0x0000000000000000000000000000000000000000', 0, {from: userAddress, value: 1e16});
+  //   let res = await myOnchainPayment.openChannel(userAddress, userAddress, 5, myToken.address, 100, {from: userAddress});
+  //   let channelID = res.receipt.logs[0].args[6];
+  //   res = await myOnchainPayment.userDeposit(channelID, 100, {from: userAddress});
+  //   let channel = await myOnchainPayment.channelMap.call(channelID);
+  //   assert.equal(channel.deposit.toNumber(), 200, "channel deposit error");
+
+  //   let beforeBalance = await myToken.balanceOf(providerAddress, {from: providerAddress});
+  //   let beforeProviderEthBalance = await web3.eth.getBalance(providerAddress);
+  //   res = await myOnchainPayment.kill({from: providerAddress});
+
+  //   let afterBalance = await myToken.balanceOf(providerAddress, {from: providerAddress});
+  //   let contractTokenBalance = await myToken.balanceOf(myOnchainPayment.address, {from: providerAddress});
+  //   let contractEthBalance = await web3.eth.getBalance(myOnchainPayment.address);
+  //   let afterProviderEthBalance = await web3.eth.getBalance(providerAddress);
+
+  //   console.log(beforeBalance, afterBalance, contractTokenBalance, contractEthBalance);
+  //   console.log(beforeProviderEthBalance, afterProviderEthBalance);
+
+
+  // })
+
 });

@@ -38,6 +38,7 @@ session_deploy.deploy()
         return eth_deploy.deploy(); //deploy eth
     })
     .then(res => {
+        // res = '0x6dDCb2d0e3a2D8A41a1517802f4BbcDd0dC48754';
         console.log("eth_contractAddress:" + res);
         if(res == null){
             res = '';
@@ -72,7 +73,7 @@ session_deploy.deploy()
         console.log("cita_contractAddress:" + res)
         res = {
             "appPNAddress": res,
-            ethPpcUrl: config.eth.provider,
+            ethRpcUrl: config.eth.provider,
             appRpcUrl: config.cita.provider,
         };
         result = Object.assign(result, res);

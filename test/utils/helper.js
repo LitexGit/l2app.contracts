@@ -23,7 +23,7 @@ function personalSign(messageHash, privateKey) {
   return myEcsign(
     web3.utils.soliditySha3(
       { t: "string", v: "\x19Ethereum Signed Message:\n32" },
-      { t: "bytes32", v: messageHash.toString("hex") }
+      { t: "bytes32", v: ethUtil.bufferToHex(messageHash) }
     ),
     privateKey
   );

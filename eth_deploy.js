@@ -34,7 +34,7 @@ const deploy = async () => {
   // console.log('transactionHash:', transactionHash);
   let receipt;
   let repeatTime = 0;
-  while (repeatTime++ < 60) {
+  while (true) {
     try {
       receipt = await web3.eth.getTransactionReceipt(transactionHash);
       if (receipt != null) {
@@ -67,7 +67,7 @@ async function executeTransaction(bytecodeWithParam, nonce) {
   var tx = new Tx(rawTransaction);
   tx.sign(privKey);
   var serializedTx = tx.serialize();
-  // console.log('serializedTx', serializedTx);
+  console.log('serializedTx', serializedTx);
 
   return new Promise((resolve, reject) => {
     web3.eth.sendSignedTransaction('0x' + serializedTx.toString('hex'))

@@ -93,7 +93,7 @@ session_deploy.deploy()
         result = Object.assign(result, config);
         //write in ouput.json
         result_write = JSON.stringify(result, null, 4);
-        fs.writeFile('./ouput.json', result_write, (err) => {
+        fs.writeFile('./output.json', result_write, (err) => {
             if (err) {
                 console.error(err);
             } else {

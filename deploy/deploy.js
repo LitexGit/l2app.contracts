@@ -1,8 +1,7 @@
 const fs = require('fs')
-const eth_deploy = require('./eth_deploy.js')
+const onchain_deploy = require('./onchain_deploy.js')
 const operator_deploy = require('./operator_deploy')
 const cita_deploy = require('./cita_deploy')
-const token_deploy = require('./token_deploy')
 const session_deploy = require('./session_deploy')
 const config = require('./conf.json');
 
@@ -20,22 +19,7 @@ session_deploy.deploy()
             "appSessionAddress": res
         };
         result = Object.assign(result, res);
-        // result.push(res);
-        // console.log("result:"+result)
-    //     return token_deploy.deploy() //deploy token
-    // })
-    // .then(res => {
-    //     console.log("token_contractAddress:" + res)
-    //     if(res == null){
-    //         res = '';
-    //     }
-    //     res = {
-    //         "token_contractAddress": res
-    //     };
-    //     result = Object.assign(result, res);
-        // result.push(res);
-        // console.log("result:"+result)
-        return eth_deploy.deploy(); //deploy eth
+        return onchain_deploy.deploy(); //deploy eth
     })
     .then(res => {
         // res = '0x6dDCb2d0e3a2D8A41a1517802f4BbcDd0dC48754';
@@ -73,7 +57,7 @@ session_deploy.deploy()
         console.log("cita_contractAddress:" + res)
         res = {
             "appPNAddress": res,
-            ethRpcUrl: config.eth.provider,
+            ethRpcUrl: config.mainchain.provider,
             appRpcUrl: config.cita.provider,
         };
         result = Object.assign(result, res);

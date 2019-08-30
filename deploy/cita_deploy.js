@@ -7,7 +7,7 @@ const deploy = function (onchainPayment,operator) {
   const {
     abi,
     bytecode
-  } = require('./build/contracts/OffchainPayment.json')
+  } = require('../build/contracts/OffchainPayment.json')
 
   const config = require("./conf.json");
   const chain = config.cita;

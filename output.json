@@ -1,0 +1,47 @@
+{
+    "contractAddress": {
+        "appSessionAddress": "0xeA9905EC51433400D10C1AF3937d74244376b190",
+        "ethPNAddress": "0xD497794173F5baeE166F103eeb451c20cB509338",
+        "appOperatorAddress": "0xce84838d208eeE019b12912a7Ad72C18273724b1",
+        "appPNAddress": "0xD3128E58b347aa2457500D5BeB30610Cc9385efd",
+        "ethRpcUrl": "http://39.96.8.192:8545",
+        "appRpcUrl": "https://cita.milewan.com:9191"
+    },
+    "mainchain": {
+        "provider": "http://39.96.8.192:8545",
+        "privateKey": "0xC70EAC41ED2E750D1C5860280B388CD908BA1EAC01CEB2F7485D60452BB44EDB"
+    },
+    "cita": {
+        "provider": "https://cita.milewan.com:9191",
+        "privateKey": "0x942B7AEA90C26D00052B682A223FD0A1072EE7BD22D379009C9C299AB921CC71"
+    },
+    "onchain_constructArgs": {
+        "regulator": "0x9c2f73f60F7f051c54d5E96Ac465E5e4a287CcA9",
+        "provider": "0x3b12309c7544cD27BFc39c1367537c7a444eaF80",
+        "settleWindowMin": 1,
+        "settleWindowMax": 9,
+        "chainID": 4
+    },
+    "operator_constructArgs": {
+        "owners": [
+            "0x795FFd28F1e8Fb301F67003e38d9951C30c683c6",
+            "0xBFABce65D309F16B06E1197b8925f56d2a59b7A3"
+        ],
+        "required": 2
+    },
+    "cita_constructArgs": {
+        "provider": "0x3b12309c7544cD27BFc39c1367537c7a444eaF80",
+        "regulator": "0x9c2f73f60F7f051c54d5E96Ac465E5e4a287CcA9",
+        "chainID": 4,
+        "onchainPayment": "0xD497794173F5baeE166F103eeb451c20cB509338",
+        "operator": "0xce84838d208eeE019b12912a7Ad72C18273724b1"
+    },
+    "gasPrice": {
+        "onchain": 15,
+        "token": 15
+    },
+    "gasLimit": {
+        "onchain": 6666666,
+        "token": 6666666
+    }
+}

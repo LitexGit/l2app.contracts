@@ -1,6 +1,6 @@
 const ethUtil = require('ethereumjs-util');
 const { expectRevert, time } = require('openzeppelin-test-helpers');
-var OnchainPayment = artifacts.require("OnchainPayment");
+var OnchainPayment = artifacts.require("OnchainPayment_v0");
 var LiteXToken = artifacts.require("LiteXToken");
 var TetherToken = artifacts.require("TetherToken");
 
@@ -23,7 +23,8 @@ contract('OnchainPayment', (accounts) => {
   });
 
   beforeEach(async ()=>{
-    myOnchainPayment = await OnchainPayment.new(regulatorAddress, providerAddress, 1, 9, 1, {from: providerAddress});
+    myOnchainPayment = await OnchainPayment.new({from: providerAddress});
+    myOnchainPayment.initialize(regulatorAddress,providerAddress,1,9,1);
     typedData.domain.verifyingContract = myOnchainPayment.address;
     typedData.domain.chainId = 1;
     myToken = await LiteXToken.new({from: userAddress});

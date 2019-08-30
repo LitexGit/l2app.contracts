@@ -2,8 +2,9 @@ pragma solidity >=0.4.24 <0.6.0;
 
 import "./lib/ECDSA.sol";
 import "./lib/ERC20.sol";
+import "./lib/Initializable.sol";
 
-contract OnchainPayment {
+contract OnchainPayment_v0 is Initializable{
     using SafeERC20 for ERC20;
 
     /* States */
@@ -63,14 +64,15 @@ contract OnchainPayment {
 
     /* Constructor */
 
-    constructor (
+    function initialize(
         address _regulator,
         address _provider,
         uint256 _settleWindowMin,
         uint256 _settleWindowMax,
         uint256 _chainID
     )
-        public
+    public
+    initializer
     {
         require(_settleWindowMin > 0);
         require(_settleWindowMax > _settleWindowMin);

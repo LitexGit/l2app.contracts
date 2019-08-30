@@ -1,16 +1,16 @@
 const Web3 = require('web3');
-const web3 = new Web3(Web3.givenProvider || 'http://54.250.21.165:8545');
+const web3 = new Web3(Web3.givenProvider || 'http://39.96.8.192:8545');
 const Tx = require('ethereumjs-tx');
 const ethUtil = require('ethereumjs-util');
 
-const user = '0x430195EBc99c0e2Fe3caA7B7dC8De8491Cf04fA9';
-const userPK = Buffer.from('C84795FFCFEA582F50AB364A76270A3131826F4F01DC592F3335B71CA31E939B', 'hex');
-const provider = '0xa08105d7650Fe007978a291CcFECbB321fC21ffe';
-const providerPK = Buffer.from('6A22D7D5D87EFC4A1375203B7E54FBCF35FAA84975891C5E3D12BE86C579A6E5', 'hex');
-const regulator = '0x4Aa670bCe722B9698A670afc968b1dE5f1553df9';
-const regulatorPK = Buffer.from('DDC1738AC05989633A43A49FB8B9FBE77970CCA9F85921768C2BD8FABBFB2E55', 'hex');
+const user = '';
+const userPK = Buffer.from('', 'hex');
+const provider = '';
+const providerPK = Buffer.from('', 'hex');
+const regulator = '';
+const regulatorPK = Buffer.from('', 'hex');
 
-const contract = '0x224D32fB0A315ACDE49A6eaDD383977746B59107';
+const contract = '0xD497794173F5baeE166F103eeb451c20cB509338';
 
 async function openChannel(user, puppet, window, token, amount) {
     let data = web3.eth.abi.encodeFunctionCall({ "constant": false, "inputs": [ { "name": "user", "type": "address" }, { "name": "puppet", "type": "address" }, { "name": "settleWindow", "type": "uint256" }, { "name": "token", "type": "address" }, { "name": "amount", "type": "uint256" } ], "name": "openChannel", "outputs": [], "payable": true, "stateMutability": "payable", "type": "function" }, [user, puppet, window, token, amount]);

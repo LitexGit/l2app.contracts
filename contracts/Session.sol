@@ -173,12 +173,14 @@ contract Session {
                 sessionID,
                 mType,
                 content
-        )); 
+        ));
+        address user = ECDSA.recover(mHash, signature);
         if (from == sessions[sessionID].provider) {
             require(msg.sender == from, "invalid sender");
         } else {
             require(isUserExist(sessionID, from), "invalid user");
             require(OCPInterface(sessions[sessionID].paymentContract).isPuppet(from, ECDSA.recover(mHash, signature)), "invalid puppet signature");
+            
         }
         Transfer memory transferData;
         if (paymentData.length != 0) {
@@ -192,7 +194,7 @@ contract Session {
         }
         if (transferData.balance != 0 && transferData.nonce != 0 && mType != 0) {
             mHash = keccak256(
-                abi.encodePacked(                  
+                abi.encodePacked(
                     mHash,
                     transferData.amount
                 )
